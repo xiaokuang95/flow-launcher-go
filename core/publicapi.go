@@ -671,11 +671,37 @@ func (a *PublicAPI) LogException(className, message string, err error) {
 type Logger struct {
 	dir string
 
-	mu sync.Mutex
+	mu    sync.Mutex
+	level string
 }
 
 // NewLogger makes a logger writing under a directory.
-func NewLogger(dir string) *Logger { return &Logger{dir: dir} }
+func NewLogger(dir string) *Logger { return &Logger{dir: dir, level: LogLevelINFO} }
+
+// SetLevel says how much of what the launcher does is written, which is
+// what its own setting asks for.
+func (l *Logger) SetLevel(level string) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.level = level
+	l.mu.Unlock()
+}
+
+// writes reports whether a line of a level is worth keeping.
+func (l *Logger) writes(level string) bool {
+	levels := map[string]int{LogLevelNONE: 4, LogLevelERROR: 3, LogLevelINFO: 2, LogLevelDEBUG: 1}
+	kept, ok := levels[l.level]
+	if !ok {
+		kept = levels[LogLevelINFO]
+	}
+	written, ok := levels[level]
+	if !ok {
+		return true
+	}
+	return written >= kept
+}
 
 func (l *Logger) write(level, className, message string) {
 	if l == nil {
@@ -685,6 +711,10 @@ func (l *Logger) write(level, className, message string) {
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	if !l.writes(level) {
+		return
+	}
 
 	if err := os.MkdirAll(l.dir, 0o755); err != nil {
 		return

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"launch/core"
@@ -52,8 +54,8 @@ func (a *app) queryBox(c *ui.Context) {
 			Bind(&a.input).
 			Placeholder(a.placeholder()).
 			Label(core.T("", "queryTextBoxPlaceholder")).
-			FontSize(float32(a.queryFontSize())).
 			Grow(1)
+		input = a.styleQueryFont(input)
 
 		// The query box takes every key, so that the launcher's own
 		// bindings work while it has the focus, and passes on the ones it
@@ -99,6 +101,43 @@ func (a *app) resultFontSize() int {
 		return a.settings.ResultFontSize
 	}
 	return 16
+}
+
+// resultSubFontSize is the size a result's subtitle is drawn at.
+func (a *app) resultSubFontSize() int {
+	if a.settings.ResultSubItemFontSize > 0 {
+		return a.settings.ResultSubItemFontSize
+	}
+	return 12
+}
+
+// styleResultFont draws text in the face the settings ask for, which is
+// the desktop's own when the user named none.
+func (a *app) styleResultFont(element ui.Element) ui.Element {
+	element = element.FontSize(float32(a.resultFontSize())).SingleLine()
+	if a.settings.ResultFont != "" {
+		element = element.Font(a.settings.ResultFont)
+	}
+	switch strings.ToLower(a.settings.ResultFontWeight) {
+	case "bold", "semi-bold", "semibold", "black", "heavy":
+		element = element.Bold()
+	}
+	if strings.EqualFold(a.settings.ResultFontStyle, "italic") {
+		element = element.Italic()
+	}
+	return element
+}
+
+// styleQueryFont draws the query in the face the settings ask for.
+func (a *app) styleQueryFont(element ui.Element) ui.Element {
+	element = element.FontSize(float32(a.queryFontSize()))
+	if a.settings.QueryBoxFont != "" {
+		element = element.Font(a.settings.QueryBoxFont)
+	}
+	if strings.EqualFold(a.settings.QueryBoxFontStyle, "italic") {
+		element = element.Italic()
+	}
+	return element
 }
 
 // keyInput handles the keys the launcher binds while the query box has the
@@ -343,7 +382,7 @@ func (a *app) resultRow(row ui.ListRow) {
 			a.resultTitle(c, result)
 			if result.SubTitle != "" {
 				subtitle := ui.Text(c, result.SubTitle).
-					FontSize(12).
+					FontSize(float32(a.resultSubFontSize())).
 					SingleLine().
 					TextColor(t.TextMuted)
 				if result.SubTitleToolTip != "" {
@@ -355,7 +394,7 @@ func (a *app) resultRow(row ui.ListRow) {
 			}
 		})
 
-		if result.ShowBadge && result.BadgeIcoPath != "" {
+		if a.settings.ShowBadges && result.ShowBadge && result.BadgeIcoPath != "" && a.badgeShows(result) {
 			if bitmap := a.bitmapFor(result.BadgeIcoPath); bitmap != nil {
 				ui.Image(c, bitmap).Size(16, 16)
 			}
@@ -369,6 +408,24 @@ func (a *app) resultRow(row ui.ListRow) {
 	element.ContextMenu(func(m *ui.Menu) { a.resultContextMenu(m, result) })
 }
 
+// badgeShows reports whether a result's badge is drawn, which the user may
+// ask for the results of the plugins that answer every query only.
+func (a *app) badgeShows(result core.Result) bool {
+	if !a.settings.ShowBadgesGlobalOnly {
+		return true
+	}
+	pair, ok := a.manager.GetPluginForID(result.PluginID)
+	if !ok {
+		return false
+	}
+	for _, keyword := range pair.Metadata.ActionKeywords {
+		if keyword == core.GlobalPluginWildcardSign {
+			return true
+		}
+	}
+	return false
+}
+
 // resultIcon draws the icon of a result, which a plugin may give as a path,
 // as a picture it drew, or as a character of a font.
 func (a *app) resultIcon(c *ui.Context, result core.Result) {
@@ -378,7 +435,10 @@ func (a *app) resultIcon(c *ui.Context, result core.Result) {
 			return
 		}
 	}
-	if result.Glyph != nil {
+
+	// A plugin may give its icon as a character of a font, and the user
+	// decides which of the two is drawn when it gives both.
+	if result.Glyph != nil && (a.settings.UseGlyphIcons || result.IcoPath == "") {
 		ui.Text(c, result.Glyph.Glyph).Font(result.Glyph.FontFamily).FontSize(20).Width(24).TextAlign(ui.Center)
 		return
 	}
@@ -387,6 +447,10 @@ func (a *app) resultIcon(c *ui.Context, result core.Result) {
 		if result.RoundedIcon {
 			image.Radius(4)
 		}
+		return
+	}
+	if result.Glyph != nil {
+		ui.Text(c, result.Glyph.Glyph).Font(result.Glyph.FontFamily).FontSize(20).Width(24).TextAlign(ui.Center)
 		return
 	}
 	// A result whose icon is missing keeps its place, so that the titles of
@@ -399,7 +463,7 @@ func (a *app) resultIcon(c *ui.Context, result core.Result) {
 func (a *app) resultTitle(c *ui.Context, result core.Result) {
 	t := c.Theme()
 	style := func(element ui.Element) ui.Element {
-		return element.FontSize(float32(a.resultFontSize())).SingleLine()
+		return a.styleResultFont(element)
 	}
 
 	if len(result.TitleHighlightData) == 0 {

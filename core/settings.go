@@ -78,6 +78,14 @@ type CustomShortcut struct {
 
 // Settings is the launcher's own settings, as Settings.json holds them.
 type Settings struct {
+	// ActivateTimes is how many times the launcher has been opened, which
+	// the about page shows.
+	ActivateTimes int `json:"ActivateTimes"`
+	// LogLevel is how much of what the launcher does is written to its log
+	// file, as the reference names the levels: NONE writes nothing, ERROR
+	// failures only, INFO what it did, DEBUG everything.
+	LogLevel string `json:"LogLevel"`
+
 	// --- Startup ---
 	StartFlowLauncherOnSystemStartup bool `json:"StartFlowLauncherOnSystemStartup"`
 	UseLogonTaskForStartup           bool `json:"UseLogonTaskForStartup"`
@@ -118,6 +126,33 @@ type Settings struct {
 	ResultFontSize      int           `json:"ResultFontSize"`
 	QueryFontSize       int           `json:"QueryFontSize"`
 	CustomTheme         bool          `json:"CustomTheme"`
+	// ResultFont, QueryBoxFont and the weights and styles after them are
+	// the faces the query box and the results are drawn in. Empty means
+	// the face the desktop uses.
+	ResultFont            string `json:"ResultFont"`
+	QueryBoxFont          string `json:"QueryBoxFont"`
+	ResultFontWeight      string `json:"ResultFontWeight"`
+	ResultFontStyle       string `json:"ResultFontStyle"`
+	QueryBoxFontWeight    string `json:"QueryBoxFontWeight"`
+	QueryBoxFontStyle     string `json:"QueryBoxFontStyle"`
+	ResultSubItemFontSize int    `json:"ResultSubItemFontSize"`
+	// UseGlyphIcons draws a result's icon as a character of the icon font
+	// rather than as a picture, which the reference offers for the results
+	// that carry one.
+	UseGlyphIcons bool `json:"UseGlyphIcons"`
+	// ShowBadges draws the badge a result carries, such as the one that
+	// says a result is from the history.
+	ShowBadges bool `json:"ShowBadges"`
+	// ShowBadgesGlobalOnly draws a badge only on the results of the plugins
+	// that answer every query.
+	ShowBadgesGlobalOnly bool `json:"ShowBadgesGlobalOnly"`
+	// UseAnimation, AnimationSpeed and CustomAnimationLength are the
+	// reference's settings for animating the window as it opens and closes.
+	// mygo's window has no such animation, so they are read and kept, and
+	// nothing draws them yet.
+	UseAnimation          bool `json:"UseAnimation"`
+	AnimationSpeed        int  `json:"AnimationSpeed"`
+	CustomAnimationLength int  `json:"CustomAnimationLength"`
 
 	// --- Searching ---
 	QuerySearchPrecision SearchPrecisionScore `json:"QuerySearchPrecision"`
@@ -226,6 +261,12 @@ func DefaultSettings() *Settings {
 		BackdropType:                       BackdropNone,
 		ColorScheme:                        "System",
 		QuerySearchPrecision:               SearchPrecisionRegular,
+		ResultSubItemFontSize:              12,
+		ShowBadges:                         true,
+		UseAnimation:                       true,
+		LogLevel:                           LogLevelINFO,
+		AnimationSpeed:                     100,
+		CustomAnimationLength:              200,
 		DoublePinyinSchema:                 DefaultDoublePinyinSchema,
 		UsePolyphonicPhraseOverrides:       true,
 		SearchDelayTime:                    150,
@@ -331,7 +372,19 @@ func (s *Settings) applyDefaults() {
 	if s.DoublePinyinSchema == "" {
 		s.DoublePinyinSchema = defaults.DoublePinyinSchema
 	}
+	if s.LogLevel == "" {
+		s.LogLevel = defaults.LogLevel
+	}
 }
+
+// The levels the launcher's log file keeps, from everything to failures
+// only, as the reference names them.
+const (
+	LogLevelNONE  = "NONE"
+	LogLevelERROR = "ERROR"
+	LogLevelINFO  = "INFO"
+	LogLevelDEBUG = "DEBUG"
+)
 
 // The range the settings window offers for the number of results.
 const (

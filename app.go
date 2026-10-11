@@ -120,6 +120,7 @@ func newApp(dataDir string) (*app, error) {
 		"{clipboard}": func() string { return mygo.Clipboard.ReadText() },
 	}
 	a.keys = hotkeysFrom(settings)
+	a.api.Logger.SetLevel(settings.LogLevel)
 
 	a.api.Hooks = a.hooks()
 	// A plugin written in another language calls the launcher through the
@@ -240,6 +241,7 @@ func (a *app) applySettings() {
 	}
 	a.engine.CustomShortcuts = a.settings.CustomShortcuts
 	a.api.SetMatcher(matcherFor(a.settings))
+	a.api.Logger.SetLevel(a.settings.LogLevel)
 	a.keys = hotkeysFrom(a.settings)
 	a.lastWidth, a.lastHeight = 0, 0
 	a.requery()

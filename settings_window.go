@@ -178,6 +178,21 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 	s.checkbox(c, core.T("", "UsePolyphonicPhraseOverrides"), &draft.UsePolyphonicPhraseOverrides)
 	s.checkbox(c, core.T("", "ShouldUseDoublePinyin"), &draft.UseDoublePinyin)
 
+	s.field(c, core.T("", "logLevel"), func() {
+		levels := []string{core.LogLevelDEBUG, core.LogLevelINFO, core.LogLevelERROR, core.LogLevelNONE}
+		names := make([]string, 0, len(levels))
+		for _, level := range levels {
+			names = append(names, core.T("", "LogLevel"+level))
+		}
+		chosen := nameForCode(levels, names, s.draft.LogLevel)
+		if ui.Select(c, &chosen, names).Width(220).Changed() {
+			if level := codeForName(names, levels, chosen); level != "" {
+				s.draft.LogLevel = level
+				s.apply()
+			}
+		}
+	})
+
 	s.field(c, core.T("", "DoublePinyinSchema"), func() {
 		codes := core.DoublePinyinSchemas
 		names := make([]string, 0, len(codes))
@@ -245,6 +260,34 @@ func (s *settingsWindow) themePage(c *ui.Context) {
 			s.apply()
 		}
 	})
+
+	s.field(c, core.T("", "resultSubItemFont"), func() {
+		size := float64(s.draft.ResultSubItemFontSize)
+		if size <= 0 {
+			size = 12
+		}
+		if ui.Slider(c, &size, 8, 24).Width(220).Changed() {
+			s.draft.ResultSubItemFontSize = int(size + 0.5)
+			s.apply()
+		}
+	})
+
+	// The faces, which the reference offers as free text: what the desktop
+	// knows by that name is what is used.
+	s.field(c, core.T("", "queryBoxFont"), func() {
+		if ui.TextInput(c, &s.draft.QueryBoxFont).Width(220).Changed() {
+			s.apply()
+		}
+	})
+	s.field(c, core.T("", "resultItemFont"), func() {
+		if ui.TextInput(c, &s.draft.ResultFont).Width(220).Changed() {
+			s.apply()
+		}
+	})
+
+	s.checkbox(c, core.T("", "useGlyphUI"), &s.draft.UseGlyphIcons)
+	s.checkbox(c, core.T("", "showBadges"), &s.draft.ShowBadges)
+	s.checkbox(c, core.T("", "showBadgesGlobalOnly"), &s.draft.ShowBadgesGlobalOnly)
 }
 
 // hotkeyPage shows the keys the launcher answers to.
@@ -447,6 +490,7 @@ func (s *settingsWindow) aboutPage(c *ui.Context) {
 	ui.Text(c, core.T("", "aboutDescription")).TextColor(c.Theme().TextMuted)
 	ui.Textf(c, "%s: %s", core.T("", "plugins"), fmt.Sprint(len(s.app.manager.AllLoadedPlugins())))
 	ui.Textf(c, "%s: %s", core.T("", "pluginDirectory"), s.app.dataDir).Selectable().FontSize(12)
+	ui.Text(c, core.Tf("", "about_activate_times", fmt.Sprint(s.app.settings.ActivateTimes))).FontSize(12)
 }
 
 // checkbox is a setting that is on or off.
