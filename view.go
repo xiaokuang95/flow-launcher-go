@@ -267,6 +267,7 @@ func (a *app) moveMenuSelection(delta int) {
 		return
 	}
 	a.contextIndex = (a.contextIndex + delta + len(a.contextMenu)) % len(a.contextMenu)
+	a.showSelection()
 }
 
 // moveSelection walks the results, wrapping around as the reference does.
@@ -275,6 +276,7 @@ func (a *app) moveSelection(delta int) {
 		return
 	}
 	a.selection = (a.selection + delta + len(a.results)) % len(a.results)
+	a.showSelection()
 }
 
 // selectIndex chooses a result by its place.
@@ -283,6 +285,15 @@ func (a *app) selectIndex(index int) {
 		return
 	}
 	a.selection = index
+	a.showSelection()
+}
+
+// showSelection scrolls the list so that the result the user is on is on
+// the screen. The keys that move the choice are the launcher's own, so the
+// list is told where the choice went rather than following it by itself.
+func (a *app) showSelection() {
+	a.list.ScrollIntoView(a.selection)
+	a.menuList.ScrollIntoView(a.contextIndex)
 }
 
 // pageSize is how many results a page moves by.
