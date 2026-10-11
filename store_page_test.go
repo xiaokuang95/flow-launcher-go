@@ -52,7 +52,7 @@ func storeOf(t *testing.T, count int) (*app, *storeReader) {
 	store := core.NewPluginStore("0.1.0", filepath.Join(t.TempDir(), "store.json"))
 	store.Client = &http.Client{Transport: reader}
 
-	a := &app{store: store}
+	a := &app{store: store, settings: core.DefaultSettings()}
 	a.api = core.NewPublicAPI(nil, t.TempDir(), "test")
 	a.api.Hooks.GetPluginManifest = a.pluginManifest
 	a.api.Hooks.UpdateManifest = a.updatePluginManifest

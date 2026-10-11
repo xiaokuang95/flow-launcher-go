@@ -86,6 +86,9 @@ type app struct {
 	// background, so that it is read once at a time.
 	manifestMu      sync.Mutex
 	readingManifest bool
+
+	// updateMu stands in for the main thread when there is no window.
+	updateMu sync.Mutex
 }
 
 // newApp makes the launcher and loads everything it needs: the settings,
@@ -274,6 +277,11 @@ func (a *app) applySettings() {
 	a.api.Logger.SetLevel(a.settings.LogLevel)
 	a.keys = hotkeysFrom(a.settings)
 	a.lastWidth, a.lastHeight = 0, 0
+
+	// The launcher wears what was changed, and is drawn again: a theme, a
+	// width or a font that only takes effect at the next keystroke is one
+	// the user does not believe was changed.
+	a.update(func() {})
 	a.requery()
 }
 
@@ -452,8 +460,15 @@ func (a *app) clampSelection() {
 }
 
 // update runs a function on the main thread and draws a frame.
+//
+// The launcher's own state is written from the plugins' goroutines while a
+// search runs, and read while a frame is drawn, so a launcher without a
+// window — a probe, a test — runs those functions one at a time under a
+// lock rather than all at once on whichever goroutine called.
 func (a *app) update(fn func()) {
 	if a.win == nil {
+		a.updateMu.Lock()
+		defer a.updateMu.Unlock()
 		fn()
 		return
 	}

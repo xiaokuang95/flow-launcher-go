@@ -61,6 +61,9 @@ func openSettingsWindow(a *app) {
 
 // view builds the settings window.
 func (s *settingsWindow) view(c *ui.Context) {
+	// The settings wear the theme the user is choosing, so that a theme is
+	// seen as it is picked rather than after the window is closed.
+	s.app.applyTheme(c)
 	t := c.Theme()
 
 	s.pageList.Selected = &s.page
