@@ -170,6 +170,27 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 	})
 
 	s.checkbox(c, core.T("", "ignoreAccents"), &draft.IgnoreAccents)
+
+	// A name written in Chinese is found by its pinyin, which is what the
+	// reference's own settings offer the same way.
+	s.checkbox(c, core.T("", "ShouldUsePinyin"), &draft.ShouldUsePinyin)
+	s.checkbox(c, core.T("", "UsePolyphonicPhraseOverrides"), &draft.UsePolyphonicPhraseOverrides)
+	s.checkbox(c, core.T("", "ShouldUseDoublePinyin"), &draft.UseDoublePinyin)
+
+	s.field(c, core.T("", "DoublePinyinSchema"), func() {
+		codes := core.DoublePinyinSchemas
+		names := make([]string, 0, len(codes))
+		for _, code := range codes {
+			names = append(names, core.T("", "DoublePinyinSchemas"+code))
+		}
+		chosen := nameForCode(codes, names, draft.DoublePinyinSchema)
+		if ui.Select(c, &chosen, names).Width(220).Changed() {
+			if code := codeForName(names, codes, chosen); code != "" {
+				draft.DoublePinyinSchema = code
+				s.apply()
+			}
+		}
+	})
 }
 
 // themePage picks the theme the launcher wears.

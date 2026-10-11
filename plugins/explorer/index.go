@@ -81,15 +81,15 @@ const indexAge = 30 * time.Second
 func (w *walkIndex) Available() (bool, string) { return true, "" }
 
 // Search finds the files and folders whose name matches, best first.
-func (w *walkIndex) Search(query string, limit int, excluded []string) ([]SearchResult, error) {
-	return w.find(query, limit, excluded)
+func (w *walkIndex) Search(query string, limit int, excluded []string, matcher core.StringMatcher) ([]SearchResult, error) {
+	return w.find(query, limit, excluded, matcher)
 }
 
 // ContentSearch finds the files whose text matches. A walk cannot read
 // every file it passes, so a content search answers with the files whose
 // name matches, which is what the user is then offered to look in.
-func (w *walkIndex) ContentSearch(query string, limit int, excluded []string) ([]SearchResult, error) {
-	return w.find(query, limit, excluded)
+func (w *walkIndex) ContentSearch(query string, limit int, excluded []string, matcher core.StringMatcher) ([]SearchResult, error) {
+	return w.find(query, limit, excluded, matcher)
 }
 
 // Reload reads the folders again, as F5 asks.
@@ -145,8 +145,10 @@ func (w *walkIndex) refresh() {
 	w.mu.Unlock()
 }
 
-// find matches what was typed against the files the walk found.
-func (w *walkIndex) find(query string, limit int, excluded []string) ([]SearchResult, error) {
+// find matches what was typed against the files the walk found, using the
+// launcher's own matcher, so that a name written in Chinese is found by its
+// pinyin and accents are folded away when the user asked for that.
+func (w *walkIndex) find(query string, limit int, excluded []string, matcher core.StringMatcher) ([]SearchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
@@ -157,12 +159,15 @@ func (w *walkIndex) find(query string, limit int, excluded []string) ([]SearchRe
 
 	// The precision is the lowest one, so that a name that is only nearly
 	// right is still offered.
-	matcher := core.StringMatcher{UserSettingSearchPrecision: core.SearchPrecisionLow}
+	matcher.UserSettingSearchPrecision = core.SearchPrecisionLow
 
 	// Every character of the query has to appear in a name, in order, for
 	// the match to have any chance; checking that first is far cheaper
 	// than scoring twenty thousand names, and rejects almost all of them.
+	// The check compares letters as they are written, so it is only sound
+	// while the matcher does the same.
 	needle := []rune(strings.ToLower(query))
+	prefilter := !matcher.IgnoreAccents
 
 	type scored struct {
 		result SearchResult
@@ -175,7 +180,7 @@ func (w *walkIndex) find(query string, limit int, excluded []string) ([]SearchRe
 			continue
 		}
 
-		if !isSubsequence(needle, entry.name) {
+		if prefilter && !mightMatch(needle, entry.name, matcher.Alphabet) {
 			continue
 		}
 
@@ -209,6 +214,21 @@ func (w *walkIndex) find(query string, limit int, excluded []string) ([]SearchRe
 		results = append(results, entry.result)
 	}
 	return results, nil
+}
+
+// mightMatch is the cheap check above for one name: every character of the
+// query has to appear in it, in order. A name written in Chinese is matched
+// by its pinyin, which the characters themselves do not hold, so what the
+// matcher will compare it with is checked as well.
+func mightMatch(needle []rune, name string, alphabet core.Alphabet) bool {
+	if isSubsequence(needle, name) {
+		return true
+	}
+	if alphabet == nil || !core.HasChinese(name) {
+		return false
+	}
+	translated, _ := alphabet.Translate(name)
+	return isSubsequence(needle, translated)
 }
 
 // isSubsequence reports whether every character of the needle appears in

@@ -101,10 +101,7 @@ func newApp(dataDir string) (*app, error) {
 	a.manager.Settings = pluginsSettings
 	a.api = core.NewPublicAPI(a.manager, dataDir, version)
 	a.manager.API = a.api
-	a.api.SetMatcher(core.StringMatcher{
-		UserSettingSearchPrecision: settings.QuerySearchPrecision,
-		IgnoreAccents:              settings.IgnoreAccents,
-	})
+	a.api.SetMatcher(matcherFor(settings))
 
 	a.engine = core.NewEngine(a.manager, settings)
 	a.engine.History = a.history
@@ -135,6 +132,25 @@ func newApp(dataDir string) (*app, error) {
 
 	loadPlugins(a)
 	return a, nil
+}
+
+// matcherFor is how the launcher matches a query against what it is
+// compared with: the precision the user chose, whether accents are folded
+// away, and, when the user asked for it, the pinyin a name written in
+// Chinese can be found by.
+func matcherFor(settings *core.Settings) core.StringMatcher {
+	matcher := core.StringMatcher{
+		UserSettingSearchPrecision: settings.QuerySearchPrecision,
+		IgnoreAccents:              settings.IgnoreAccents,
+	}
+	if settings.ShouldUsePinyin {
+		matcher.Alphabet = &core.PinyinAlphabet{
+			UseDoublePinyin:              settings.UseDoublePinyin,
+			Schema:                       settings.DoublePinyinSchema,
+			UsePolyphonicPhraseOverrides: settings.UsePolyphonicPhraseOverrides,
+		}
+	}
+	return matcher
 }
 
 // hooks are what the launcher does for a plugin.
@@ -217,10 +233,7 @@ func (a *app) applySettings() {
 		a.engine.SearchDelayTime = time.Duration(a.settings.SearchDelayTime) * time.Millisecond
 	}
 	a.engine.CustomShortcuts = a.settings.CustomShortcuts
-	a.api.SetMatcher(core.StringMatcher{
-		UserSettingSearchPrecision: a.settings.QuerySearchPrecision,
-		IgnoreAccents:              a.settings.IgnoreAccents,
-	})
+	a.api.SetMatcher(matcherFor(a.settings))
 	a.lastWidth, a.lastHeight = 0, 0
 	a.requery()
 }

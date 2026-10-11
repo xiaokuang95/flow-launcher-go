@@ -120,14 +120,24 @@ type Settings struct {
 	CustomTheme         bool          `json:"CustomTheme"`
 
 	// --- Searching ---
-	QuerySearchPrecision               SearchPrecisionScore `json:"QuerySearchPrecision"`
-	IgnoreAccents                      bool                 `json:"IgnoreAccents"`
-	SearchQueryResultsWithDelay        bool                 `json:"SearchQueryResultsWithDelay"`
-	SearchDelayTime                    int                  `json:"SearchDelayTime"`
-	ShowHomePage                       bool                 `json:"ShowHomePage"`
-	ShowHistoryResultsForHomePage      bool                 `json:"ShowHistoryResultsForHomePage"`
-	MaxHistoryResultsToShowForHomePage int                  `json:"MaxHistoryResultsToShowForHomePage"`
-	ShowUnknownSourceWarning           bool                 `json:"ShowUnknownSourceWarning"`
+	QuerySearchPrecision SearchPrecisionScore `json:"QuerySearchPrecision"`
+	IgnoreAccents        bool                 `json:"IgnoreAccents"`
+	// ShouldUsePinyin matches a query typed in Latin letters against a name
+	// written in Chinese, by its pinyin.
+	ShouldUsePinyin bool `json:"ShouldUsePinyin"`
+	// UseDoublePinyin writes each syllable the way a double pinyin keyboard
+	// does, and DoublePinyinSchema is which keyboard the user knows.
+	UseDoublePinyin    bool   `json:"UseDoublePinyin"`
+	DoublePinyinSchema string `json:"DoublePinyinSchema"`
+	// UsePolyphonicPhraseOverrides reads a phrase as the word it is rather
+	// than as its characters one by one.
+	UsePolyphonicPhraseOverrides       bool `json:"UsePolyphonicPhraseOverrides"`
+	SearchQueryResultsWithDelay        bool `json:"SearchQueryResultsWithDelay"`
+	SearchDelayTime                    int  `json:"SearchDelayTime"`
+	ShowHomePage                       bool `json:"ShowHomePage"`
+	ShowHistoryResultsForHomePage      bool `json:"ShowHistoryResultsForHomePage"`
+	MaxHistoryResultsToShowForHomePage int  `json:"MaxHistoryResultsToShowForHomePage"`
+	ShowUnknownSourceWarning           bool `json:"ShowUnknownSourceWarning"`
 
 	// --- The query box ---
 	PlaceholderText          string `json:"PlaceholderText"`
@@ -216,6 +226,8 @@ func DefaultSettings() *Settings {
 		BackdropType:                       BackdropNone,
 		ColorScheme:                        "System",
 		QuerySearchPrecision:               SearchPrecisionRegular,
+		DoublePinyinSchema:                 DefaultDoublePinyinSchema,
+		UsePolyphonicPhraseOverrides:       true,
 		SearchDelayTime:                    150,
 		ShowHomePage:                       true,
 		MaxHistoryResultsToShowForHomePage: 5,
@@ -315,6 +327,9 @@ func (s *Settings) applyDefaults() {
 	}
 	if s.SoundVolume == 0 {
 		s.SoundVolume = defaults.SoundVolume
+	}
+	if s.DoublePinyinSchema == "" {
+		s.DoublePinyinSchema = defaults.DoublePinyinSchema
 	}
 }
 

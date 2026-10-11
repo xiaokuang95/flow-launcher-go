@@ -76,6 +76,9 @@ func (e *Engine) Search(ctx context.Context, queryText string) []Result {
 // with everything found so far, so that the launcher can show results while
 // the slower plugins are still working. A plugin that answers again
 // replaces its own earlier results and leaves the others alone.
+//
+// The plugins answer at the same time, so onResults is called from more
+// than one goroutine and what it reads and writes has to be its own.
 func (e *Engine) SearchStreaming(ctx context.Context, queryText string, onResults func(ResultBatch)) {
 	query := e.BuildQuery(queryText)
 	if query == nil {

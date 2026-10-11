@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -286,9 +287,13 @@ func TestSearchKeepsTheResultsOfThePluginsThatAnswered(t *testing.T) {
 	}
 	engine.Manager.mu.Unlock()
 
+	// The plugins answer at the same time, so the counting is guarded.
+	var mu sync.Mutex
 	var batches int
 	var last []Result
 	engine.SearchStreaming(context.Background(), "one", func(batch ResultBatch) {
+		mu.Lock()
+		defer mu.Unlock()
 		batches++
 		last = batch.Results
 	})

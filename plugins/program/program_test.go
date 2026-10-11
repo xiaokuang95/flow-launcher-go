@@ -250,6 +250,26 @@ func TestContextMenuOffersRunningItAnotherWay(t *testing.T) {
 	}
 }
 
+func TestAProgramNamedInChineseIsFoundByItsPinyin(t *testing.T) {
+	programs := []Program{{
+		Name: "微信", FullPath: `C:\Program Files\WeChat\WeChat.exe`,
+		ParentDirectory: `C:\Program Files\WeChat`, UniqueIdentifier: "wechat", Enabled: true,
+	}}
+	plugin, _ := newTestPlugin(t, programs...)
+	plugin.api.SetMatcher(core.StringMatcher{
+		UserSettingSearchPrecision: core.SearchPrecisionRegular,
+		Alphabet:                   &core.PinyinAlphabet{UsePolyphonicPhraseOverrides: true},
+	})
+
+	results, err := plugin.Query(context.Background(), core.Query{Search: "weixin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("got %v, want 微信 found by its pinyin", titlesOf(results))
+	}
+}
+
 func TestDescriptionIsShownAndSearched(t *testing.T) {
 	programs := []Program{{
 		Name: "vlc", Description: "VLC media player",

@@ -19,12 +19,12 @@ type fakeIndex struct {
 
 func (f *fakeIndex) Available() (bool, string) { return true, "" }
 
-func (f *fakeIndex) Search(query string, limit int, excluded []string) ([]SearchResult, error) {
+func (f *fakeIndex) Search(query string, limit int, excluded []string, matcher core.StringMatcher) ([]SearchResult, error) {
 	f.queries = append(f.queries, query)
 	return f.found, nil
 }
 
-func (f *fakeIndex) ContentSearch(query string, limit int, excluded []string) ([]SearchResult, error) {
+func (f *fakeIndex) ContentSearch(query string, limit int, excluded []string, matcher core.StringMatcher) ([]SearchResult, error) {
 	f.queries = append(f.queries, query)
 	return f.found, nil
 }
@@ -260,7 +260,7 @@ func TestWalkIndexFindsFilesInTheUsersFolders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := (&walkIndex{}).Search("quarterly", 10, nil)
+	found, err := (&walkIndex{}).Search("quarterly", 10, nil, testMatcher())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestWalkIndexLeavesOutExcludedFolders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := (&walkIndex{}).Search("report", 10, []string{documents})
+	found, err := (&walkIndex{}).Search("report", 10, []string{documents}, testMatcher())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestWarmReadsTheFoldersInTheBackground(t *testing.T) {
 	// Warm does not read the folders itself: what the walk found is there
 	// a moment later.
 	waitFor(t, func() bool {
-		found, err := index.Search("quarterly", 10, nil)
+		found, err := index.Search("quarterly", 10, nil, testMatcher())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -337,7 +337,7 @@ func TestAWalkThatIsOldIsAnsweredFromWhatItHas(t *testing.T) {
 	}
 
 	index := &walkIndex{}
-	if _, err := index.Search("quarterly", 10, nil); err != nil {
+	if _, err := index.Search("quarterly", 10, nil, testMatcher()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -351,7 +351,7 @@ func TestAWalkThatIsOldIsAnsweredFromWhatItHas(t *testing.T) {
 
 	// The search is answered with what the walk found, rather than waiting
 	// for the folders to be read again.
-	found, err := index.Search("later", 10, nil)
+	found, err := index.Search("later", 10, nil, testMatcher())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,12 +361,44 @@ func TestAWalkThatIsOldIsAnsweredFromWhatItHas(t *testing.T) {
 
 	// Which it is, in the background.
 	waitFor(t, func() bool {
-		found, err := index.Search("later", 10, nil)
+		found, err := index.Search("later", 10, nil, testMatcher())
 		if err != nil {
 			t.Fatal(err)
 		}
 		return len(found) == 1
 	})
+}
+
+func TestWalkIndexFindsAChineseNameByItsPinyin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+
+	documents := filepath.Join(home, "Documents")
+	if err := os.MkdirAll(documents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(documents, "工作报告.docx"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	matcher := core.StringMatcher{
+		UserSettingSearchPrecision: core.SearchPrecisionLow,
+		Alphabet:                   &core.PinyinAlphabet{UsePolyphonicPhraseOverrides: true},
+	}
+	found, err := (&walkIndex{}).Search("gongzuo", 10, nil, matcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 || filepath.Base(found[0].FullPath) != "工作报告.docx" {
+		t.Errorf("the search found %v, want the report found by its pinyin", found)
+	}
+}
+
+// testMatcher is the matcher a test searches with: the lowest precision,
+// so that a name that is only nearly right is still offered.
+func testMatcher() core.StringMatcher {
+	return core.StringMatcher{UserSettingSearchPrecision: core.SearchPrecisionLow}
 }
 
 // waitFor waits for something to become true, as a walk in the background

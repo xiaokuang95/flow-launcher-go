@@ -321,7 +321,7 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 		if p.settings.HideUninstallers && isUninstaller(program) {
 			continue
 		}
-		if prefilter && !p.mightMatch(needle, program) {
+		if prefilter && !p.mightMatch(needle, program, matcher.Alphabet) {
 			continue
 		}
 
@@ -339,13 +339,27 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 // mightMatch is the cheap pre-check above: every character of the query has
 // to appear, in order, in one of the fields resultFor looks at, so a program
 // that fails this cannot match at all.
-func (p *Plugin) mightMatch(needle []rune, program Program) bool {
-	if isSubsequence(needle, program.DisplayName()) ||
-		isSubsequence(needle, program.Name) ||
-		isSubsequence(needle, program.ExecutableName) {
+func (p *Plugin) mightMatch(needle []rune, program Program, alphabet core.Alphabet) bool {
+	if mightMatchOne(needle, alphabet, program.DisplayName()) ||
+		mightMatchOne(needle, alphabet, program.Name) ||
+		mightMatchOne(needle, alphabet, program.ExecutableName) {
 		return true
 	}
-	return p.settings.EnableDescription && isSubsequence(needle, program.Description)
+	return p.settings.EnableDescription && mightMatchOne(needle, alphabet, program.Description)
+}
+
+// mightMatchOne is the same check for one field. A name written in Chinese
+// is matched by its pinyin, which the characters themselves do not hold, so
+// what the matcher will compare it with is checked as well.
+func mightMatchOne(needle []rune, alphabet core.Alphabet, text string) bool {
+	if isSubsequence(needle, text) {
+		return true
+	}
+	if alphabet == nil || !core.HasChinese(text) {
+		return false
+	}
+	translated, _ := alphabet.Translate(text)
+	return isSubsequence(needle, translated)
 }
 
 // resultFor is one program as a result, and whether it matched at all.

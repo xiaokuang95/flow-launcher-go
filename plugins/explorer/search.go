@@ -42,10 +42,12 @@ type FileIndex interface {
 	// Available reports whether the index can be searched, and why not
 	// when it cannot.
 	Available() (bool, string)
-	// Search finds the files whose name matches, up to a limit.
-	Search(query string, limit int, excluded []string) ([]SearchResult, error)
+	// Search finds the files whose name matches, up to a limit, with the
+	// launcher's own matcher: a name written in Chinese is found by its
+	// pinyin, and the precision is the lowest one.
+	Search(query string, limit int, excluded []string, matcher core.StringMatcher) ([]SearchResult, error)
 	// ContentSearch finds the files whose text matches.
-	ContentSearch(query string, limit int, excluded []string) ([]SearchResult, error)
+	ContentSearch(query string, limit int, excluded []string, matcher core.StringMatcher) ([]SearchResult, error)
 }
 
 // pathSearch answers a path with what it holds, and with the folders and
@@ -173,7 +175,7 @@ func (p *Plugin) indexSearch(ctx context.Context, query core.Query) ([]core.Resu
 		return nil, nil
 	}
 
-	found, err := p.index.Search(query.Search, p.settings.MaxResult, p.excludedPaths())
+	found, err := p.index.Search(query.Search, p.settings.MaxResult, p.excludedPaths(), p.api.Matcher())
 	if err != nil {
 		p.api.LogError("Explorer", "searching the index failed: "+err.Error())
 		return nil, nil
@@ -193,7 +195,7 @@ func (p *Plugin) contentSearch(ctx context.Context, query core.Query) ([]core.Re
 		return nil, nil
 	}
 
-	found, err := p.index.ContentSearch(query.Search, p.settings.MaxResult, p.excludedPaths())
+	found, err := p.index.ContentSearch(query.Search, p.settings.MaxResult, p.excludedPaths(), p.api.Matcher())
 	if err != nil {
 		p.api.LogError("Explorer", "searching the index failed: "+err.Error())
 		return nil, nil
