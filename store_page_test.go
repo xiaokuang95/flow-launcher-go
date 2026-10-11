@@ -63,6 +63,7 @@ func storeOf(t *testing.T, count int) (*app, *storeReader) {
 func TestTheStorePageDrawsOnlyWhatIsOnTheScreen(t *testing.T) {
 	a, _ := storeOf(t, 349)
 	waitForStore(t, a)
+	t.Cleanup(func() { waitForStore(t, a) })
 
 	window := &settingsWindow{app: a}
 	window.page = pageOf(t, "pluginStore")
@@ -98,6 +99,7 @@ func waitForStore(t *testing.T, a *app) {
 func TestTheStorePageFiltersWhatIsTyped(t *testing.T) {
 	a, _ := storeOf(t, 100)
 	waitForStore(t, a)
+	t.Cleanup(func() { waitForStore(t, a) })
 	window := &settingsWindow{app: a}
 
 	manifest := a.pluginManifest()
@@ -122,6 +124,7 @@ func TestTheStorePageFiltersWhatIsTyped(t *testing.T) {
 func TestDrawingTheStorePageDoesNotReadTheStore(t *testing.T) {
 	a, reader := storeOf(t, 10)
 	waitForStore(t, a)
+	t.Cleanup(func() { waitForStore(t, a) })
 
 	// What the window draws is what has been read already: reading the
 	// store is a network call, and the window is drawn on every keystroke.
@@ -131,6 +134,53 @@ func TestDrawingTheStorePageDoesNotReadTheStore(t *testing.T) {
 	}
 	if reader.reads != before {
 		t.Errorf("drawing the store page read the store again: %d reads, want %d", reader.reads, before)
+	}
+}
+
+func TestReadingTheStoreNeverHoldsTheFrame(t *testing.T) {
+	a, reader := storeOf(t, 349)
+
+	// The first call asks for the list and answers at once; the ones after
+	// it answer with what is there. None of them waits for the network,
+	// since they are called while the window is being drawn.
+	deadline := time.Now().Add(20 * time.Second)
+	arrived := false
+	for !arrived && time.Now().Before(deadline) {
+		start := time.Now()
+		plugins := a.pluginManifest()
+		if took := time.Since(start); took > 100*time.Millisecond {
+			t.Fatalf("asking for the store took %.1f ms, want it never to wait for the network", float64(took.Microseconds())/1000)
+		}
+		arrived = len(plugins) > 0
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !arrived {
+		t.Fatalf("the store was never read")
+	}
+	if reader.reads == 0 {
+		t.Errorf("the store was never asked")
+	}
+}
+
+func TestTwoReadersDoNotBothFetch(t *testing.T) {
+	a, reader := storeOf(t, 10)
+
+	// Ten frames in a row, while the first read is still running: the
+	// store is asked once.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 10; i++ {
+			_ = a.pluginManifest()
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+	<-done
+	waitForStore(t, a)
+	t.Cleanup(func() { waitForStore(t, a) })
+
+	if reader.reads != 1 {
+		t.Errorf("the store was asked %d times, want once", reader.reads)
 	}
 }
 

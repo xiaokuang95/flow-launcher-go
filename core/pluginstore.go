@@ -48,12 +48,19 @@ type PluginStore struct {
 	mu        sync.Mutex
 	plugins   []UserPlugin
 	fetchedAt time.Time
+	// reading is true while the list is being read, so that two readers do
+	// not fetch at once.
+	reading bool
 }
 
 // NewPluginStore makes a store over the launcher's own client.
 func NewPluginStore(version, cachePath string) *PluginStore {
 	return &PluginStore{Version: version, CachePath: cachePath}
 }
+
+// The lock is held while the list in memory is looked at and changed, and
+// never while the network is read: a window asking what the list holds is
+// drawing a frame, and a fetch can take a second.
 
 // Cached is the list as it stands, without reading it again, and whether
 // there is one at all. A window that draws the store asks for this: reading
@@ -77,31 +84,63 @@ func (s *PluginStore) IsStale() bool {
 	return len(s.plugins) == 0 || time.Since(s.fetchedAt) >= storeFreshness
 }
 
-// Plugins is the list of plugins, read again when it is old.
+// Plugins is the list of plugins, read again when it is old. It answers
+// with what is held while another read is already running, rather than
+// waiting for it: a caller drawing a window cannot wait a second.
 func (s *PluginStore) Plugins(ctx context.Context, force bool) ([]UserPlugin, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if !force && len(s.plugins) > 0 && time.Since(s.fetchedAt) < storeFreshness {
-		return s.plugins, nil
+	if held, fresh := s.held(force); fresh {
+		return held, nil
 	}
+
+	s.mu.Lock()
+	if s.reading {
+		held := s.plugins
+		s.mu.Unlock()
+		return held, nil
+	}
+	s.reading = true
+	s.mu.Unlock()
+
+	plugins, err := s.fetch(ctx)
+
+	s.mu.Lock()
+	s.reading = false
+	if err == nil && len(plugins) > 0 {
+		s.plugins = plugins
+		s.fetchedAt = time.Now()
+		s.mu.Unlock()
+		s.save(plugins)
+		return plugins, nil
+	}
+	held := s.plugins
+	s.mu.Unlock()
 
 	// A list read on an earlier run is used when the store cannot be
 	// reached now, so that the plugin store is not empty offline.
-	if plugins, err := s.fetch(ctx); err == nil && len(plugins) > 0 {
-		s.plugins = plugins
-		s.fetchedAt = time.Now()
-		s.save(plugins)
-		return s.plugins, nil
-	} else if err != nil && len(s.plugins) == 0 {
+	if len(held) == 0 {
 		if cached := s.load(); len(cached) > 0 {
+			s.mu.Lock()
 			s.plugins = cached
-			return s.plugins, nil
+			s.mu.Unlock()
+			return cached, nil
 		}
+	}
+	if err != nil && len(held) == 0 {
 		return nil, err
 	}
+	return held, nil
+}
 
-	return s.plugins, nil
+// held is the list in memory, and whether it is fresh enough to answer
+// with as it stands.
+func (s *PluginStore) held(force bool) ([]UserPlugin, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if force || len(s.plugins) == 0 || time.Since(s.fetchedAt) >= storeFreshness {
+		return s.plugins, false
+	}
+	return s.plugins, true
 }
 
 // fetch reads the list from the first address that answers.
