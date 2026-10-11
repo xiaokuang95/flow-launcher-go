@@ -59,6 +59,10 @@ func (p *Plugin) LoadContextMenus(selectedResult core.Result) []core.Result {
 		items = append(items, p.openWithMenuResult(found))
 	}
 
+	// The machine's own menu, which is what the shell shows when a file is
+	// right-clicked.
+	items = append(items, p.nativeContextMenuResult(found))
+
 	// The folders a search leaves out are the ones the user excluded, so
 	// a folder can be left out of a search from here.
 	if isFolder {
@@ -152,6 +156,20 @@ func (p *Plugin) openWithMenuResult(found SearchResult) core.Result {
 	result.Action = func(action core.ActionContext) bool {
 		openWithMenu(found.FullPath)
 		return true
+	}
+	return result
+}
+
+// nativeContextMenuResult shows the shell's own menu for the item, which
+// the reference offers the same way.
+func (p *Plugin) nativeContextMenuResult(found SearchResult) core.Result {
+	result := core.NewResult(
+		p.words.T("plugin_explorer_show_contextmenu_title"),
+		"",
+		"Images/context_menu.png", 0)
+	result.Action = func(action core.ActionContext) bool {
+		p.showShellContextMenu(found.FullPath, action.SpecialKeyState.ShiftPressed)
+		return false
 	}
 	return result
 }

@@ -159,6 +159,28 @@ func matcherFor(settings *core.Settings) core.StringMatcher {
 	return matcher
 }
 
+// showShellContextMenu shows the machine's own context menu for a path, at
+// the place the mouse is, from the launcher's own window: the menu belongs
+// to a window, and the shell's objects belong to the thread that made them.
+func (a *app) showShellContextMenu(path string, extendedVerbs bool) bool {
+	if path == "" {
+		return false
+	}
+	owner := uintptr(0)
+	if a.win != nil {
+		owner = a.win.NativeHandle()
+	}
+	// The menu belongs to a window, and the shell's objects belong to the
+	// thread that made them, so it is shown on the thread the launcher's
+	// window lives on rather than on one of its own.
+	mygo.RunOnMain(func() {
+		if err := core.ShowShellContextMenu(path, core.ShellContextMenuPointAtCursor(), owner, extendedVerbs); err != nil {
+			a.api.LogError("launcher", "showing the machine's own menu failed: "+err.Error())
+		}
+	})
+	return true
+}
+
 // hooks are what the launcher does for a plugin.
 func (a *app) hooks() core.Hooks {
 	return core.Hooks{
@@ -178,21 +200,24 @@ func (a *app) hooks() core.Hooks {
 		ShowMsg:             func(title, subTitle, icon string) { a.notify(title, subTitle) },
 		ShowMsgError:        func(title, subTitle string) { a.notify(title, subTitle) },
 		OpenDirectory:       openDirectory,
-		OpenURL:             openURL,
-		OpenAppURI:          func(uri string) { openURL(uri, nil) },
-		ShellRun:            shellRun,
-		ToggleGameMode:      func() { a.setGameMode(!a.gameMode()) },
-		SetGameMode:         a.setGameMode,
-		IsGameModeOn:        a.gameMode,
-		IsDarkTheme:         func() bool { return isDarkTheme() },
-		UpdateManifest:      a.updatePluginManifest,
-		GetPluginManifest:   a.pluginManifest,
-		InstallPlugin:       a.installPlugin,
-		UninstallPlugin:     a.uninstallPlugin,
-		LogDirectory:        func() string { return filepath.Join(a.dataDir, "Logs") },
-		Exit:                func() { mygo.App.Quit() },
-		SetOpenAtLogin:      a.setOpenAtLogin,
-		ShowMsgBox:          a.showMessageBox,
+		ShowShellContextMenu: func(path string, extendedVerbs bool) bool {
+			return a.showShellContextMenu(path, extendedVerbs)
+		},
+		OpenURL:           openURL,
+		OpenAppURI:        func(uri string) { openURL(uri, nil) },
+		ShellRun:          shellRun,
+		ToggleGameMode:    func() { a.setGameMode(!a.gameMode()) },
+		SetGameMode:       a.setGameMode,
+		IsGameModeOn:      a.gameMode,
+		IsDarkTheme:       func() bool { return isDarkTheme() },
+		UpdateManifest:    a.updatePluginManifest,
+		GetPluginManifest: a.pluginManifest,
+		InstallPlugin:     a.installPlugin,
+		UninstallPlugin:   a.uninstallPlugin,
+		LogDirectory:      func() string { return filepath.Join(a.dataDir, "Logs") },
+		Exit:              func() { mygo.App.Quit() },
+		SetOpenAtLogin:    a.setOpenAtLogin,
+		ShowMsgBox:        a.showMessageBox,
 	}
 }
 

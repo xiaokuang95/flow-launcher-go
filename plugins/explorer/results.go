@@ -59,7 +59,9 @@ func (p *Plugin) fileResult(found SearchResult, query core.Query) core.Result {
 	result.Action = func(action core.ActionContext) bool {
 		switch {
 		case action.SpecialKeyState.AltPressed:
-			p.openWithShell(found.FullPath, false)
+			// Alt shows the machine's own menu for the file, which is what
+			// the reference's explorer does.
+			p.showShellContextMenu(found.FullPath, action.SpecialKeyState.ShiftPressed)
 			return false
 		case action.SpecialKeyState.CtrlPressed && action.SpecialKeyState.ShiftPressed:
 			p.openInEditor(found.FullPath)
@@ -98,7 +100,7 @@ func (p *Plugin) folderResult(found SearchResult, query core.Query) core.Result 
 	result.Action = func(action core.ActionContext) bool {
 		switch {
 		case action.SpecialKeyState.AltPressed:
-			p.openWithShell(found.FullPath, true)
+			p.showShellContextMenu(found.FullPath, action.SpecialKeyState.ShiftPressed)
 			return false
 		case action.SpecialKeyState.CtrlPressed && action.SpecialKeyState.ShiftPressed:
 			p.api.OpenDirectory(found.FullPath, "")
@@ -117,6 +119,16 @@ func (p *Plugin) folderResult(found SearchResult, query core.Query) core.Result 
 		}
 	}
 	return result
+}
+
+// showShellContextMenu shows the machine's own menu for a path, which the
+// launcher owns: the plugin asks for it rather than showing one itself.
+func (p *Plugin) showShellContextMenu(path string, extendedVerbs bool) {
+	if !p.api.ShowShellContextMenu(path, extendedVerbs) {
+		// A launcher that cannot show it opens the file instead, so that
+		// the key is never one that does nothing.
+		p.openWithShell(path, false)
+	}
 }
 
 // openFolderResult is the folder a path names, which is offered first so

@@ -57,13 +57,16 @@ type Hooks struct {
 	UpdatePluginManifest   func(usePrimaryURLOnly bool) error
 	// UpdateManifest reads the plugin store again, and is what a plugin of
 	// the launcher's own calls.
-	UpdateManifest  func(force bool) error
-	PluginModified  func(id string) bool
-	OpenDirectory   func(directoryPath, fileNameOrFilePath string)
-	OpenURL         func(rawURL string, inPrivate *bool)
-	OpenAppURI      func(appURI string)
-	ShellRun        func(cmd, filename string)
-	CopyToClipboard func(text string, directCopy, showDefaultNotification bool)
+	UpdateManifest func(force bool) error
+	PluginModified func(id string) bool
+	OpenDirectory  func(directoryPath, fileNameOrFilePath string)
+	// ShowShellContextMenu shows the machine's own context menu for a
+	// path, at the place the mouse is, and answers whether it was shown.
+	ShowShellContextMenu func(path string, extendedVerbs bool) bool
+	OpenURL              func(rawURL string, inPrivate *bool)
+	OpenAppURI           func(appURI string)
+	ShellRun             func(cmd, filename string)
+	CopyToClipboard      func(text string, directCopy, showDefaultNotification bool)
 }
 
 // MessageBoxButtons and MessageBoxIcon are what a message box offers.
@@ -420,6 +423,17 @@ func (a *PublicAPI) KeyboardCallbacks() []func(vkCode, scanCode int, state Speci
 }
 
 // --- The machine ---
+
+// ShowShellContextMenu shows the machine's own context menu for a path,
+// which is what the shell shows when a file is right-clicked: opening it
+// with something else, copying it, sending it somewhere, its properties.
+// It answers when the user has closed the menu.
+func (a *PublicAPI) ShowShellContextMenu(path string, extendedVerbs bool) bool {
+	if a.Hooks.ShowShellContextMenu == nil {
+		return false
+	}
+	return a.Hooks.ShowShellContextMenu(path, extendedVerbs)
+}
 
 // OpenDirectory shows a directory, optionally with a file inside it
 // selected.

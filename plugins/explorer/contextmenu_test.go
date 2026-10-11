@@ -264,6 +264,84 @@ func TestRunningAsAnotherUserIsOnlyOfferedForPrograms(t *testing.T) {
 	}
 }
 
+func TestTheMenuOffersTheMachinesOwnMenu(t *testing.T) {
+	found := SearchResult{FullPath: `C:\Users\crazy\Documents\report.pdf`, Type: ResultTypeFile}
+	plugin, items := menuFor(t, found, nil)
+
+	var shown []string
+	var extended []bool
+	plugin.api.Hooks.ShowShellContextMenu = func(path string, extendedVerbs bool) bool {
+		shown = append(shown, path)
+		extended = append(extended, extendedVerbs)
+		return true
+	}
+
+	item(t, items, "Show Windows Context Menu").Action(core.ActionContext{})
+
+	if len(shown) != 1 || shown[0] != found.FullPath {
+		t.Fatalf("the launcher was asked for the machine's menu of %v, want the file", shown)
+	}
+	if extended[0] {
+		t.Errorf("the plain menu was asked for the extended one")
+	}
+}
+
+func TestAltOverAFileAsksForTheMachinesOwnMenu(t *testing.T) {
+	found := SearchResult{FullPath: `C:\Users\crazy\Documents\report.pdf`, Type: ResultTypeFile}
+	plugin, _ := newTestPlugin(t)
+
+	asked := ""
+	extended := true
+	plugin.api.Hooks.ShowShellContextMenu = func(path string, extendedVerbs bool) bool {
+		asked, extended = path, extendedVerbs
+		return true
+	}
+
+	// Alt is the key the reference's explorer answers with the shell's own
+	// menu, and Alt+Shift with the menu's extended items.
+	plugin.fileResult(found, core.Query{}).Action(
+		core.ActionContext{SpecialKeyState: core.SpecialKeyState{AltPressed: true}})
+	if asked != found.FullPath || extended {
+		t.Errorf("Alt asked for %q (extended %v), want the plain menu of the file", asked, extended)
+	}
+
+	asked, extended = "", false
+	plugin.fileResult(found, core.Query{}).Action(
+		core.ActionContext{SpecialKeyState: core.SpecialKeyState{AltPressed: true, ShiftPressed: true}})
+	if asked != found.FullPath || !extended {
+		t.Errorf("Alt+Shift asked for %q (extended %v), want the extended menu", asked, extended)
+	}
+}
+
+func TestAltOverAFolderAsksForTheMachinesOwnMenu(t *testing.T) {
+	found := SearchResult{FullPath: `C:\Users\crazy\Documents\Work`, Type: ResultTypeFolder}
+	plugin, _ := newTestPlugin(t)
+
+	asked := ""
+	plugin.api.Hooks.ShowShellContextMenu = func(path string, extendedVerbs bool) bool {
+		asked = path
+		return true
+	}
+
+	plugin.folderResult(found, core.Query{}).Action(
+		core.ActionContext{SpecialKeyState: core.SpecialKeyState{AltPressed: true}})
+
+	if asked != found.FullPath {
+		t.Errorf("Alt asked for the machine's menu of %q, want the folder", asked)
+	}
+}
+
+func TestAMachineMenuThatCannotBeShownOpensTheFile(t *testing.T) {
+	found := SearchResult{FullPath: `C:\Users\crazy\Documents\report.pdf`, Type: ResultTypeFile}
+	plugin, _ := newTestPlugin(t)
+	plugin.api.Hooks.ShowShellContextMenu = func(path string, extendedVerbs bool) bool { return false }
+
+	// A launcher that cannot show the shell's menu still does something
+	// with the key rather than nothing at all.
+	plugin.fileResult(found, core.Query{}).Action(
+		core.ActionContext{SpecialKeyState: core.SpecialKeyState{AltPressed: true}})
+}
+
 func TestOpeningContainingFolderAsksTheLauncher(t *testing.T) {
 	found := SearchResult{FullPath: `C:\Users\crazy\Documents\Work\report.pdf`, Type: ResultTypeFile}
 	plugin, items := menuFor(t, found, nil)

@@ -95,14 +95,12 @@ starting at login, and game mode
 
 ## What is not done
 
-- **The machine's own context menu for a file.** The reference's explorer
-  shows the shell's right-click menu over a result (`Helper/ShellContextMenu.cs`,
-  1613 lines of `IShellFolder` and `IContextMenu`), and can inline those
-  items into the launcher's own menu
-  (`Helper/ShellContextMenuDisplayHelper.cs`, 524 lines). Neither is here,
-  so Alt over an explorer result opens the file rather than offering the
-  shell's menu, and the menu has no "Show the Windows context menu" item.
-  The rest of the explorer's menu is there (`plugins/explorer/contextmenu.go`).
+- **The shell's menu items inlined into the launcher's own menu.** The
+  reference can list what the shell would offer (`Helper/ShellContextMenuDisplayHelper.cs`,
+  524 lines, which has to draw and drive the shell's owner-drawn items).
+  This launcher shows the shell's own menu instead
+  (`core/shellmenu_windows.go`, `ShowShellContextMenu`), which is what Alt
+  over a result does; the inlined list is not here.
 - **DialogJump (Alt+G)**: the shell's `Shell.Application` object answered
   `DISP_E_MEMBERNOTFOUND` to every late-bound `Invoke`, whatever the
   locale, the class context or the argument description (all checked
@@ -154,6 +152,15 @@ These were missing and were filled in, one commit each:
   them, written the way the reference writes them ("Ctrl + Tab", "F1"),
   and the hotkey page offers each one. A setting that cannot be read binds
   nothing rather than binding the wrong key.
+- **The machine's own context menu for a file**
+  (`core/shellmenu_windows.go`): Alt over an explorer result, and a "Show
+  Windows Context Menu" item, open the menu the shell shows when a file is
+  right-clicked. The shell's own interfaces are called through the COM
+  helper the `.lnk` reader already uses. Covered by a test that asks the
+  shell for the menu of a file and of a folder and counts the items it
+  fills it with (18 and 29 on this machine); showing the menu and running
+  what is chosen was checked once by hand, since a menu waits for the user
+  and a test must not open one.
 - **The pictures the built-in plugins name** (`core/pluginimages.go`):
   each plugin ships the reference's own and writes them into its directory
   when it is initialized, once. Before this, a result whose icon came from
