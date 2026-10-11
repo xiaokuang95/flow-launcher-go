@@ -81,27 +81,28 @@ func (s *settingsWindow) view(c *ui.Context) {
 			}).Grow(1)
 		})
 
-		// The page does not scroll: a page with a list of choices on it
-		// gives the list the room that is left, and the list scrolls
-		// within it. A page that scrolled as well would take the wheel
-		// first, and having nowhere to go, leave the list unreachable.
-		ui.Column(c).Fill().Padding(20).Gap(12).ClipY().Children(func() {
-			switch settingsPages[s.page] {
-			case "general":
-				s.generalPage(c)
-			case "theme":
-				s.themePage(c)
-			case "hotkey":
-				s.hotkeyPage(c)
-			case "proxy":
-				s.proxyPage(c)
-			case "plugins":
-				s.pluginsPage(c)
-			case "pluginStore":
-				s.pluginStorePage(c)
-			case "about":
-				s.aboutPage(c)
-			}
+		// A page taller than the window scrolls, so that every setting on
+		// it can be reached. The drop-downs are drawn beside the window
+		// and take the wheel themselves, so they are not held up by it.
+		ui.Scroll(c).Grow(1).Children(func() {
+			ui.Column(c).Padding(20).Gap(12).Children(func() {
+				switch settingsPages[s.page] {
+				case "general":
+					s.generalPage(c)
+				case "theme":
+					s.themePage(c)
+				case "hotkey":
+					s.hotkeyPage(c)
+				case "proxy":
+					s.proxyPage(c)
+				case "plugins":
+					s.pluginsPage(c)
+				case "pluginStore":
+					s.pluginStorePage(c)
+				case "about":
+					s.aboutPage(c)
+				}
+			})
 		})
 	})
 }
@@ -139,10 +140,10 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 			codes = append(codes, language.Code)
 		}
 
-		// The list holds names, so the code is found from the name.
+		// The drop-down holds names, so the code is found from the name.
 		chosen := nameForCode(codes, names, draft.Language)
-		choiceList(c, "language", names, chosen, func(name string) {
-			if code := codeForName(names, codes, name); code != "" {
+		dropDown(c, "language", &chosen, names, func() {
+			if code := codeForName(names, codes, chosen); code != "" {
 				draft.Language = code
 				core.SetLanguage(draft.Language)
 				s.apply()
@@ -202,8 +203,8 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 			names = append(names, core.T("", "LogLevel"+level))
 		}
 		chosen := nameForCode(levels, names, s.draft.LogLevel)
-		choiceList(c, "loglevel", names, chosen, func(name string) {
-			if level := codeForName(names, levels, name); level != "" {
+		dropDown(c, "loglevel", &chosen, names, func() {
+			if level := codeForName(names, levels, chosen); level != "" {
 				s.draft.LogLevel = level
 				s.apply()
 			}
@@ -217,8 +218,8 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 			names = append(names, core.T("", "DoublePinyinSchemas"+code))
 		}
 		chosen := nameForCode(codes, names, draft.DoublePinyinSchema)
-		choiceList(c, "pinyin", names, chosen, func(name string) {
-			if code := codeForName(names, codes, name); code != "" {
+		dropDown(c, "pinyin", &chosen, names, func() {
+			if code := codeForName(names, codes, chosen); code != "" {
 				draft.DoublePinyinSchema = code
 				s.apply()
 			}
@@ -238,15 +239,14 @@ func (s *settingsWindow) themePage(c *ui.Context) {
 		codes = append(codes, theme.FileNameWithoutExtension)
 	}
 
-	// The list takes the room the page has left, and scrolls within it:
-	// the themes are the page.
-	ui.Text(c, core.T("", "theme")).Width(200)
-	chosen := nameForCode(codes, names, s.draft.Theme)
-	choiceList(c, "theme", names, chosen, func(name string) {
-		if code := codeForName(names, codes, name); code != "" {
-			s.draft.Theme = code
-			s.apply()
-		}
+	s.field(c, core.T("", "theme"), func() {
+		chosen := nameForCode(codes, names, s.draft.Theme)
+		dropDown(c, "theme", &chosen, names, func() {
+			if code := codeForName(names, codes, chosen); code != "" {
+				s.draft.Theme = code
+				s.apply()
+			}
+		})
 	})
 
 	s.field(c, core.T("", "windowWidthSize"), func() {
@@ -512,18 +512,20 @@ func (s *settingsWindow) pluginStorePage(c *ui.Context) {
 		return ""
 	}
 
-	// The list is given the room that is left in the window: it works out
-	// how many rows that is and builds only those, which is what keeps a
-	// store of hundreds of plugins from being drawn on every frame.
-	ui.Column(c).Grow(1).Children(func() {
-		ui.List(c, &s.storeList, len(shown)).Grow(1).Rows(func(row ui.ListRow) {
-			if row.Index < 0 || row.Index >= len(shown) {
-				return
-			}
-			s.storeRow(row, shown[row.Index])
-		})
+	// The list is given a height of its own, so that it works out how many
+	// rows fit and builds only those: a store of hundreds of plugins drawn
+	// on every frame is what made this page slow.
+	ui.List(c, &s.storeList, len(shown)).Height(storeListHeight).Rows(func(row ui.ListRow) {
+		if row.Index < 0 || row.Index >= len(shown) {
+			return
+		}
+		s.storeRow(row, shown[row.Index])
 	})
 }
+
+// storeListHeight is how tall the list of the store's plugins is, after
+// which it scrolls.
+const storeListHeight = 320
 
 // storeRowsDrawn is how many rows the store page drew in the frame it drew
 // last, which a test reads to see that only what is on the screen is built.
