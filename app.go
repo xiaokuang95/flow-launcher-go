@@ -81,6 +81,11 @@ type app struct {
 	// keys are the keys the launcher answers to, read from the settings
 	// when they change.
 	keys hotkeys
+
+	// readingManifest is true while the plugin store is being read in the
+	// background, so that it is read once at a time.
+	manifestMu      sync.Mutex
+	readingManifest bool
 }
 
 // newApp makes the launcher and loads everything it needs: the settings,
@@ -319,12 +324,43 @@ func (a *app) pluginManifest() []core.UserPlugin {
 	if a.store == nil {
 		return nil
 	}
-	plugins, err := a.store.Plugins(context.Background(), false)
-	if err != nil {
-		a.api.LogError("launcher", "reading the plugin store failed: "+err.Error())
+	// What has been read is answered with, and what is old is read again in
+	// the background: this is called while the window is being drawn, and a
+	// network call there would hold the whole launcher up.
+	plugins, ok := a.store.Cached()
+	if !ok {
+		a.refreshPluginManifest()
 		return nil
 	}
+	if a.store.IsStale() {
+		a.refreshPluginManifest()
+	}
 	return plugins
+}
+
+// refreshPluginManifest reads the plugin store in the background, once at a
+// time.
+func (a *app) refreshPluginManifest() {
+	a.manifestMu.Lock()
+	reading := a.readingManifest
+	a.readingManifest = true
+	a.manifestMu.Unlock()
+
+	if reading {
+		return
+	}
+	go func() {
+		defer func() {
+			a.manifestMu.Lock()
+			a.readingManifest = false
+			a.manifestMu.Unlock()
+		}()
+
+		if err := a.updatePluginManifest(false); err != nil {
+			a.api.LogError("launcher", "reading the plugin store failed: "+err.Error())
+		}
+		a.update(func() {})
+	}()
 }
 
 // applyTheme paints the theme the user chose onto the widgets, which the

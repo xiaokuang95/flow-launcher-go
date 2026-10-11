@@ -22,6 +22,15 @@ type settingsWindow struct {
 	// draft is the settings being edited, which are written out when the
 	// window closes.
 	draft core.Settings
+
+	// storeFilter is what the user typed to narrow the plugin store, and
+	// storeShown the plugins it lets through, kept between frames.
+	storeFilter     string
+	storeFilterUsed string
+	storeShown      []core.UserPlugin
+	storeShownFor   []core.UserPlugin
+	storeList       ui.ListState
+	storeDrawn      int
 }
 
 // settingsPages are the pages the settings window shows, in order.
@@ -455,32 +464,98 @@ func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.Plugi
 	}
 }
 
-// pluginStorePage is the list of plugins the launcher can install.
+// pluginStorePage is the list of plugins the launcher can install. Only the
+// rows on the screen are drawn, since the store holds hundreds of plugins
+// and every row built is work done on every frame.
 func (s *settingsWindow) pluginStorePage(c *ui.Context) {
+	s.storeDrawn = 0
 	ui.Text(c, core.T("", "pluginStore")).FontSize(20).Bold()
 
-	manifest := s.app.api.GetPluginManifest()
+	manifest := s.app.pluginManifest()
 	if len(manifest) == 0 {
 		ui.Text(c, core.T("", "pluginStore_None")).TextColor(c.Theme().TextMuted)
 		if ui.Button(c, core.T("", "Refresh")).Clicked() {
-			go func() {
-				_ = s.app.api.UpdatePluginManifest(false)
-				s.app.update(func() {})
-			}()
+			s.app.refreshPluginManifest()
 		}
 		return
 	}
 
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Gap(6).Children(func() {
-			for _, plugin := range manifest {
-				ui.Column(c).Padding(8).Gap(2).Radius(6).Border(1, c.Theme().Border).Children(func() {
-					ui.Text(c, plugin.Name).Bold()
-					ui.Text(c, plugin.Description).FontSize(12).TextColor(c.Theme().TextMuted)
-				})
+	// What is typed narrows the list, as it does in the reference.
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, core.T("", "searchplugin")).Width(200)
+		if ui.TextInput(c, &s.storeFilter).Width(240).Changed() {
+			s.storeList.Selected = nil
+			s.storeShown = nil
+		}
+	})
+
+	shown := s.storeRows(manifest)
+	if len(shown) == 0 {
+		ui.Text(c, core.T("", "searchplugin_Noresult_Title")).TextColor(c.Theme().TextMuted)
+		return
+	}
+
+	s.storeList.Selected = nil
+	s.storeList.Label = func(row int) string {
+		if row < len(shown) {
+			return shown[row].Name
+		}
+		return ""
+	}
+
+	// The list is given the room that is left in the window: it works out
+	// how many rows that is and builds only those, which is what keeps a
+	// store of hundreds of plugins from being drawn on every frame.
+	ui.Column(c).Grow(1).Children(func() {
+		ui.List(c, &s.storeList, len(shown)).Grow(1).Rows(func(row ui.ListRow) {
+			if row.Index < 0 || row.Index >= len(shown) {
+				return
 			}
+			s.storeRow(row, shown[row.Index])
 		})
 	})
+}
+
+// storeRowsDrawn is how many rows the store page drew in the frame it drew
+// last, which a test reads to see that only what is on the screen is built.
+func (s *settingsWindow) storeRowsDrawn() int { return s.storeDrawn }
+
+// storeRow is one plugin of the store.
+func (s *settingsWindow) storeRow(row ui.ListRow, plugin core.UserPlugin) {
+	s.storeDrawn++
+	c := row.Context
+	ui.Column(c).Padding(8).Gap(2).Children(func() {
+		ui.Text(c, plugin.Name).Bold()
+		if plugin.Description != "" {
+			ui.Text(c, plugin.Description).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+		}
+	})
+}
+
+// storeRows are the plugins of the store the filter lets through, which is
+// worked out again only when the list or the filter changed: a search over
+// hundreds of names on every frame is work the window does not need.
+func (s *settingsWindow) storeRows(manifest []core.UserPlugin) []core.UserPlugin {
+	if s.storeShown != nil && s.storeFilter == s.storeFilterUsed && len(s.storeShownFor) == len(manifest) {
+		return s.storeShown
+	}
+
+	filter := strings.ToLower(strings.TrimSpace(s.storeFilter))
+	shown := make([]core.UserPlugin, 0, len(manifest))
+	for _, plugin := range manifest {
+		if filter != "" &&
+			!strings.Contains(strings.ToLower(plugin.Name), filter) &&
+			!strings.Contains(strings.ToLower(plugin.Author), filter) &&
+			!strings.Contains(strings.ToLower(plugin.Description), filter) {
+			continue
+		}
+		shown = append(shown, plugin)
+	}
+
+	s.storeShown = shown
+	s.storeFilterUsed = s.storeFilter
+	s.storeShownFor = manifest
+	return shown
 }
 
 // aboutPage says what this is.

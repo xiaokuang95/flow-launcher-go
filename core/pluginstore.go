@@ -55,6 +55,28 @@ func NewPluginStore(version, cachePath string) *PluginStore {
 	return &PluginStore{Version: version, CachePath: cachePath}
 }
 
+// Cached is the list as it stands, without reading it again, and whether
+// there is one at all. A window that draws the store asks for this: reading
+// the list is a network call, which must never happen while the window is
+// being drawn.
+func (s *PluginStore) Cached() ([]UserPlugin, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.plugins) == 0 {
+		return nil, false
+	}
+	return s.plugins, true
+}
+
+// IsStale reports whether the list is old enough to be read again.
+func (s *PluginStore) IsStale() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return len(s.plugins) == 0 || time.Since(s.fetchedAt) >= storeFreshness
+}
+
 // Plugins is the list of plugins, read again when it is old.
 func (s *PluginStore) Plugins(ctx context.Context, force bool) ([]UserPlugin, error) {
 	s.mu.Lock()
