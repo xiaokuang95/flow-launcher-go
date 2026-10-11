@@ -81,7 +81,11 @@ func (s *settingsWindow) view(c *ui.Context) {
 			}).Grow(1)
 		})
 
-		ui.Column(c).Grow(1).Padding(20).Gap(12).Children(func() {
+		// The page does not scroll: a page with a list of choices on it
+		// gives the list the room that is left, and the list scrolls
+		// within it. A page that scrolled as well would take the wheel
+		// first, and having nowhere to go, leave the list unreachable.
+		ui.Column(c).Fill().Padding(20).Gap(12).ClipY().Children(func() {
 			switch settingsPages[s.page] {
 			case "general":
 				s.generalPage(c)
@@ -135,15 +139,15 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 			codes = append(codes, language.Code)
 		}
 
-		// The drop-down holds names, so the code is found from the name.
+		// The list holds names, so the code is found from the name.
 		chosen := nameForCode(codes, names, draft.Language)
-		if ui.Select(c, &chosen, names).Width(220).Changed() {
-			if code := codeForName(names, codes, chosen); code != "" {
+		choiceList(c, "language", names, chosen, func(name string) {
+			if code := codeForName(names, codes, name); code != "" {
 				draft.Language = code
 				core.SetLanguage(draft.Language)
 				s.apply()
 			}
-		}
+		})
 	})
 
 	s.field(c, core.T("", "PlaceholderText"), func() {
@@ -198,12 +202,12 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 			names = append(names, core.T("", "LogLevel"+level))
 		}
 		chosen := nameForCode(levels, names, s.draft.LogLevel)
-		if ui.Select(c, &chosen, names).Width(220).Changed() {
-			if level := codeForName(names, levels, chosen); level != "" {
+		choiceList(c, "loglevel", names, chosen, func(name string) {
+			if level := codeForName(names, levels, name); level != "" {
 				s.draft.LogLevel = level
 				s.apply()
 			}
-		}
+		})
 	})
 
 	s.field(c, core.T("", "DoublePinyinSchema"), func() {
@@ -213,12 +217,12 @@ func (s *settingsWindow) generalPage(c *ui.Context) {
 			names = append(names, core.T("", "DoublePinyinSchemas"+code))
 		}
 		chosen := nameForCode(codes, names, draft.DoublePinyinSchema)
-		if ui.Select(c, &chosen, names).Width(220).Changed() {
-			if code := codeForName(names, codes, chosen); code != "" {
+		choiceList(c, "pinyin", names, chosen, func(name string) {
+			if code := codeForName(names, codes, name); code != "" {
 				draft.DoublePinyinSchema = code
 				s.apply()
 			}
-		}
+		})
 	})
 }
 
@@ -234,13 +238,14 @@ func (s *settingsWindow) themePage(c *ui.Context) {
 		codes = append(codes, theme.FileNameWithoutExtension)
 	}
 
-	s.field(c, core.T("", "theme"), func() {
-		chosen := nameForCode(codes, names, s.draft.Theme)
-		if ui.Select(c, &chosen, names).Width(220).Changed() {
-			if code := codeForName(names, codes, chosen); code != "" {
-				s.draft.Theme = code
-				s.apply()
-			}
+	// The list takes the room the page has left, and scrolls within it:
+	// the themes are the page.
+	ui.Text(c, core.T("", "theme")).Width(200)
+	chosen := nameForCode(codes, names, s.draft.Theme)
+	choiceList(c, "theme", names, chosen, func(name string) {
+		if code := codeForName(names, codes, name); code != "" {
+			s.draft.Theme = code
+			s.apply()
 		}
 	})
 
