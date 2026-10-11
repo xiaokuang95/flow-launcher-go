@@ -257,6 +257,17 @@ func (s *settingsWindow) hotkeyPage(c *ui.Context) {
 		}
 	})
 
+	// The keys the user chose, which the reference's hotkey page offers the
+	// same way: each is a setting written as "Ctrl + Tab" or "F1".
+	ui.Text(c, core.T("", "hotkeyPresets")).FontSize(16).Bold().Padding(0, 8, 0, 0)
+	for _, binding := range changeableHotkeys(&s.draft) {
+		s.field(c, core.T("", binding.description), func() {
+			if ui.TextInput(c, binding.setting).Width(220).Changed() {
+				s.apply()
+			}
+		})
+	}
+
 	// The keys that cannot be changed, shown so that they can be learned.
 	ui.Text(c, core.T("", "hotkeyPresets")).FontSize(16).Bold().Padding(0, 8, 0, 0)
 	for _, binding := range fixedHotkeys() {
@@ -264,6 +275,34 @@ func (s *settingsWindow) hotkeyPage(c *ui.Context) {
 			ui.Text(c, binding.keys).Width(160).Font("monospace")
 			ui.Text(c, core.T("", binding.description)).TextColor(c.Theme().TextMuted)
 		})
+	}
+}
+
+// changeableHotkeys are the keys the settings decide, with the setting each
+// is written in.
+func changeableHotkeys(settings *core.Settings) []struct {
+	setting     *string
+	description string
+} {
+	return []struct {
+		setting     *string
+		description string
+	}{
+		{&settings.PreviewHotkey, "previewHotkey"},
+		{&settings.AutoCompleteHotkey, "autoCompleteHotkey"},
+		{&settings.AutoCompleteHotkey2, "autoCompleteHotkey"},
+		{&settings.SelectNextItemHotkey, "SelectNextItemHotkey"},
+		{&settings.SelectNextItemHotkey2, "SelectNextItemHotkey"},
+		{&settings.SelectPrevItemHotkey, "SelectPrevItemHotkey"},
+		{&settings.SelectPrevItemHotkey2, "SelectPrevItemHotkey"},
+		{&settings.SelectNextPageHotkey, "SelectNextPageHotkey"},
+		{&settings.SelectPrevPageHotkey, "SelectPrevPageHotkey"},
+		{&settings.OpenContextMenuHotkey, "OpenContextMenuHotkey"},
+		{&settings.SettingWindowHotkey, "SettingWindowHotkey"},
+		{&settings.OpenHistoryHotkey, "ToggleHistoryHotkey"},
+		{&settings.CycleHistoryUpHotkey, "CycleHistoryUpHotkey"},
+		{&settings.CycleHistoryDownHotkey, "CycleHistoryDownHotkey"},
+		{&settings.OpenResultModifiers, "openResultModifiers"},
 	}
 }
 
@@ -467,16 +506,7 @@ func fixedHotkeys() []struct{ keys, description string } {
 		{"Ctrl+Enter", "OpenContainFolderHotkey"},
 		{"Shift+Enter", "OpenContextMenuHotkey"},
 		{"Alt+Enter", "HotkeyOpenResult"},
-		{"Ctrl+1..0", "HotkeyOpenResultN"},
-		{"Ctrl+O", "OpenContextMenuHotkey"},
-		{"Ctrl+I", "SettingWindowHotkey"},
-		{"Ctrl+H", "OpenHistoryHotkey"},
-		{"Ctrl+Tab", "AutoCompleteHotkey"},
-		{"Tab, Shift+Tab", "HotkeySelectItem"},
-		{"PageUp, PageDown", "HotkeySelectPage"},
-		{"F1", "previewHotkey"},
 		{"Ctrl+F12", "ToggleGameModeHotkey"},
-		{"Alt+Up, Alt+Down", "CycleHistoryHotkey"},
 		{"Ctrl+=, Ctrl+-", "QuickHeightHotkey"},
 		{"Ctrl+], Ctrl+[", "QuickWidthHotkey"},
 	}

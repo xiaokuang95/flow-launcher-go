@@ -112,6 +112,10 @@ func (a *app) keyInput(ev ui.InputEvent) bool {
 
 // key handles one key press, and reports whether the launcher took it.
 func (a *app) key(mods ui.Modifiers, key ui.Key) bool {
+	// The keys the user chose, which are the ones the reference's hotkey
+	// page lets them change.
+	keys := a.hotkeys()
+
 	// While the menu of a result is open, the keys move through it.
 	if len(a.contextMenu) > 0 {
 		switch {
@@ -129,7 +133,7 @@ func (a *app) key(mods ui.Modifiers, key ui.Key) bool {
 				step = -step
 			}
 			a.moveMenuSelection(step)
-		case mods == ui.Cmd && key == ui.KeyO:
+		case keys.contextMenu.matches(mods, key):
 			a.closeContextMenu()
 		default:
 			// Everything else is left to the query box, so that typing
@@ -145,13 +149,13 @@ func (a *app) key(mods ui.Modifiers, key ui.Key) bool {
 		a.moveSelection(1)
 	case mods == 0 && key == ui.KeyUp:
 		a.moveSelection(-1)
-	case mods == 0 && key == ui.KeyTab:
+	case anyOf(keys.selectNext, mods, key):
 		a.moveSelection(1)
-	case mods == ui.Shift && key == ui.KeyTab:
+	case anyOf(keys.selectPrev, mods, key):
 		a.moveSelection(-1)
-	case mods == 0 && key == ui.KeyPageDown:
+	case keys.selectNextPage.matches(mods, key):
 		a.moveSelection(a.pageSize())
-	case mods == 0 && key == ui.KeyPageUp:
+	case keys.selectPrevPage.matches(mods, key):
 		a.moveSelection(-a.pageSize())
 	case mods == 0 && key == ui.KeyHome, mods == ui.Alt && key == ui.KeyHome:
 		a.selectIndex(0)
@@ -161,15 +165,15 @@ func (a *app) key(mods ui.Modifiers, key ui.Key) bool {
 	// Running a result with a modifier held.
 	case mods == ui.Cmd && key == ui.KeyEnter:
 		a.runVariant(core.SpecialKeyState{CtrlPressed: true})
-	case mods == ui.Shift && key == ui.KeyEnter, mods == ui.Cmd && key == ui.KeyO:
+	case mods == ui.Shift && key == ui.KeyEnter, keys.contextMenu.matches(mods, key):
 		a.openContextMenu()
 	case mods == ui.Alt && key == ui.KeyEnter:
 		a.runVariant(core.SpecialKeyState{AltPressed: true})
 	case mods == ui.Cmd|ui.Shift && key == ui.KeyEnter:
 		a.runVariant(core.SpecialKeyState{CtrlPressed: true, ShiftPressed: true})
-	case mods == ui.Cmd && key >= ui.Key1 && key <= ui.Key9:
+	case keys.openResult != 0 && mods == keys.openResult && key >= ui.Key1 && key <= ui.Key9:
 		a.runResult(int(key-ui.Key1), core.DefaultSpecialKeyState)
-	case mods == ui.Cmd && key == ui.Key0:
+	case keys.openResult != 0 && mods == keys.openResult && key == ui.Key0:
 		a.runResult(9, core.DefaultSpecialKeyState)
 
 	// The query box and the results.
@@ -177,7 +181,7 @@ func (a *app) key(mods ui.Modifiers, key ui.Key) bool {
 		a.copySelected(false)
 	case mods == ui.Cmd|ui.Shift && key == ui.KeyC:
 		a.copySelected(true)
-	case mods == ui.Cmd && key == ui.KeyTab:
+	case anyOf(keys.autoComplete, mods, key):
 		a.autocomplete(false)
 	case mods == ui.Cmd|ui.Shift && key == ui.KeyTab:
 		a.autocomplete(true)
@@ -185,19 +189,19 @@ func (a *app) key(mods ui.Modifiers, key ui.Key) bool {
 		a.requery()
 	case mods == 0 && key == ui.KeyF5:
 		a.reloadPluginData()
-	case mods == ui.Alt && key == ui.KeyUp:
+	case keys.historyUp.matches(mods, key):
 		a.cycleHistory(-1)
-	case mods == ui.Alt && key == ui.KeyDown:
+	case keys.historyDown.matches(mods, key):
 		a.cycleHistory(1)
-	case mods == ui.Cmd && key == ui.KeyH:
+	case keys.history.matches(mods, key):
 		a.toggleHistory()
 
 	// The window.
 	case mods == 0 && key == ui.KeyEscape:
 		a.escape()
-	case mods == 0 && key == ui.KeyF1:
+	case keys.preview.matches(mods, key):
 		a.preview = !a.preview
-	case mods == ui.Cmd && key == ui.KeyI:
+	case keys.settings.matches(mods, key):
 		openSettingsWindow(a)
 	case mods == ui.Cmd && key == ui.KeyF12:
 		a.setGameMode(!a.gameMode())
@@ -210,6 +214,12 @@ func (a *app) key(mods ui.Modifiers, key ui.Key) bool {
 		return false
 	}
 	return true
+}
+
+// hotkeys are the keys the launcher answers to, which are read from the
+// settings when they change.
+func (a *app) hotkeys() hotkeys {
+	return a.keys
 }
 
 // moveMenuSelection walks the items of the menu of a result.

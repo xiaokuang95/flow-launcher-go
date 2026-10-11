@@ -77,6 +77,10 @@ type app struct {
 	lastHeight int
 	// lastWidth is the width the settings ask for.
 	lastWidth int
+
+	// keys are the keys the launcher answers to, read from the settings
+	// when they change.
+	keys hotkeys
 }
 
 // newApp makes the launcher and loads everything it needs: the settings,
@@ -115,6 +119,7 @@ func newApp(dataDir string) (*app, error) {
 	a.engine.BuiltinShortcuts = map[string]func() string{
 		"{clipboard}": func() string { return mygo.Clipboard.ReadText() },
 	}
+	a.keys = hotkeysFrom(settings)
 
 	a.api.Hooks = a.hooks()
 	// A plugin written in another language calls the launcher through the
@@ -235,6 +240,7 @@ func (a *app) applySettings() {
 	}
 	a.engine.CustomShortcuts = a.settings.CustomShortcuts
 	a.api.SetMatcher(matcherFor(a.settings))
+	a.keys = hotkeysFrom(a.settings)
 	a.lastWidth, a.lastHeight = 0, 0
 	a.requery()
 }
