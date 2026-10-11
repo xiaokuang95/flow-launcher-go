@@ -452,16 +452,32 @@ func (a *app) reloadPluginData() error {
 }
 
 // iconCache turns the icons of results into bitmaps, once each.
+//
+// Reading an icon can take a tenth of a second: a shortcut has to be
+// resolved before the shell will say what its picture is. That must not
+// happen while the window is being drawn, so an icon that is not known yet
+// is read in the background and the row is drawn without it until it is
+// there.
 type iconCache struct {
 	mu      sync.Mutex
 	bitmaps map[string]*ui.Bitmap
+	// loading are the paths being read right now, so that a path is read
+	// once however many rows ask for it.
+	loading map[string]bool
+	// ready is called when an icon has been read, so that the window can
+	// draw a frame with it.
+	ready func()
 }
 
 func newIconCache() *iconCache {
-	return &iconCache{bitmaps: map[string]*ui.Bitmap{}}
+	return &iconCache{
+		bitmaps: map[string]*ui.Bitmap{},
+		loading: map[string]bool{},
+	}
 }
 
-// bitmap is the bitmap of an icon path, or nil when it has none.
+// bitmap is the bitmap of an icon path, or nil when it has none or has not
+// been read yet.
 func (c *iconCache) bitmap(path string) *ui.Bitmap {
 	if path == "" {
 		return nil
@@ -472,20 +488,36 @@ func (c *iconCache) bitmap(path string) *ui.Bitmap {
 		c.mu.Unlock()
 		return bitmap
 	}
-	c.mu.Unlock()
-
-	content := core.IconBytes(path)
-	var bitmap *ui.Bitmap
-	if len(content) > 0 {
-		if decoded, err := ui.DecodeBitmap(content); err == nil {
-			bitmap = decoded
-		}
+	if c.loading[path] {
+		c.mu.Unlock()
+		return nil
 	}
-
-	c.mu.Lock()
-	c.bitmaps[path] = bitmap
+	c.loading[path] = true
+	ready := c.ready
 	c.mu.Unlock()
-	return bitmap
+
+	go func() {
+		content := core.IconBytes(path)
+
+		var bitmap *ui.Bitmap
+		if len(content) > 0 {
+			if decoded, err := ui.DecodeBitmap(content); err == nil {
+				bitmap = decoded
+			}
+		}
+
+		c.mu.Lock()
+		c.bitmaps[path] = bitmap
+		delete(c.loading, path)
+		c.mu.Unlock()
+
+		// The window draws a frame with the icon in it.
+		if ready != nil {
+			ready()
+		}
+	}()
+
+	return nil
 }
 
 // bitmapFor loads the bitmap of an icon path that a plugin gave, resolving

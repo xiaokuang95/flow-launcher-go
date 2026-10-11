@@ -121,8 +121,58 @@ starting at login, and game mode
   Appending it in the runner as well loses it, and the plugin is handed an
   empty argument.
 
+## Speed
+
+Typing used to feel slow: a query took about 320 ms, and the first
+keystroke after opening the window took half a second. Five things caused
+it, and all five are fixed.
+
+- **The explorer walked the user's folders for every keystroke.** The walk
+  is now kept for 30 seconds (`walkIndex.entriesNow`), read again when it
+  is old or on F5. 320 ms → 6 ms.
+- **The walk happened while the user was typing.** Reading the folders
+  takes about 400 ms, and it was done by whichever search found the walk
+  missing or old — which is the first thing typed after the launcher
+  starts, and again every thirty seconds. `walkIndex.Warm`, called from
+  the explorer's `Init`, reads the folders as the window comes up, and
+  `entriesNow` answers from the walk it has, however old it is, while the
+  folders are read again in the background. Only a search with nothing at
+  all to answer with waits for a walk. The first keystroke went from
+  390 ms to the 30 ms a search costs.
+- **Every name was fuzzy-matched.** A cheap in-order subsequence check
+  (`isSubsequence`) now rejects a name before the matcher scores it; a
+  fuzzy match cannot succeed without it, so the results are the same. The
+  program plugin's check looks at every field `resultFor` can match
+  (`mightMatch`: the name, the localized name, the executable's name and
+  the description), and is left out when the matcher folds accents away,
+  because a query may then match a letter a name spells with a diacritic.
+- **Icons were read while the window was drawn**, and reading a `.lnk`
+  takes about 120 ms because the shell has to resolve the shortcut first
+  (a plain `.exe` is 6 ms). `iconCache.bitmap` now reads one in the
+  background and asks for a new frame when it is there; a row draws
+  without its icon until then.
+- **The process killer asked the machine for every process, and a window
+  title for each, on every keystroke.** The list is kept for two seconds
+  (`Plugin.runningNow`) and dropped when something is ended.
+
+Measured with all twelve plugins loaded, median of seven runs, each query
+asked once before it is measured: `c` 32 ms, `ch` 15 ms, `chr` 12 ms,
+`chrome` 7 ms, `README` 11 ms, `s` 1 ms, `kill` 1 ms, `b` 0.5 ms. What is
+left of `c` is the explorer scoring its 20,000 files (26 ms) and the
+program plugin scoring its 8,600 programs (14 ms), which the engine runs
+at the same time.
+
 ## Known problems
 
+- **The program plugin's defaults are not the reference's.** The reference
+  starts with `EnableDescription` false, `HideAppsPath` true and
+  `EnablePathSource` false; `plugins/program/program.go`'s
+  `DefaultSettings` has them true, false, true. The last one matters most:
+  indexing the `PATH` is what turns 200 programs into the 8,600 this
+  machine has, and it is most of what a program search costs. The three
+  were written that way in the first commit and are not among the
+  deliberate differences above. Whether to match the reference, which
+  changes what the user sees, has not been decided.
 - `go vet` reports four `possible misuse of unsafe.Pointer` in
   `core/com_windows.go`. They are addresses the system handed back, turned
   into pointers again, which Go cannot tell apart from its own; the comment
@@ -134,6 +184,10 @@ starting at login, and game mode
 
 ## While working on it
 
+- The repository is https://github.com/xiaokuang95/flow-launcher-go. Three
+  commits so far: the port itself, the README and licence, and the speed
+  work (`app.go`, `plugins/explorer/`, `plugins/program/`,
+  `plugins/processkiller/`, `plugins.go` and this file).
 - **A test must never really do something to the machine.** Every platform
   action lives behind an injectable field (`sys.Machine`, `shell.Runner`,
   `processkiller.Processes`, `url.Opener`, `program.Finder`,

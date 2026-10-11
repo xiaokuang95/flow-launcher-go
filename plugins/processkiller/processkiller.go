@@ -5,6 +5,8 @@ import (
 	"embed"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"launch/core"
 )
@@ -47,6 +49,11 @@ func (p Process) Title() string {
 	return p.Name + " - " + itoa(p.ID)
 }
 
+// processCacheAge is how long the list of running processes is used before
+// the machine is asked again. Reading it means a snapshot of every process
+// and a window title for each, which is too slow to do for every keystroke.
+const processCacheAge = 2 * time.Second
+
 // Processes is what the plugin reads from the machine and does to it. It is
 // kept behind a field so that a test can watch what the plugin asked for
 // rather than reading and killing the machine's own processes.
@@ -67,6 +74,12 @@ type Plugin struct {
 	settings  Settings
 	words     *core.PluginTranslator
 	processes Processes
+
+	// cache is the list of processes read last, so that a keystroke does
+	// not ask the machine for all of them again.
+	cacheMu  sync.Mutex
+	cache    []Process
+	cachedAt time.Time
 }
 
 // New makes the process killer.
@@ -97,7 +110,7 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 // Query lists the running processes that match what the user typed, and the
 // processes whose windows they can see when nothing is typed.
 func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, error) {
-	running, err := p.processes.Running()
+	running, err := p.runningNow()
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +186,7 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 			if err := p.processes.Kill(process); err != nil {
 				p.api.LogError("ProcessKiller", "ending a process failed: "+err.Error())
 			}
+			p.forgetProcesses()
 			// The list of processes has changed, so the query is run again.
 			p.api.ReQuery(true)
 			return true
@@ -197,6 +211,7 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 					p.api.LogError("ProcessKiller", "ending a process failed: "+err.Error())
 				}
 			}
+			p.forgetProcesses()
 			p.api.ReQuery(true)
 			return true
 		}
@@ -204,6 +219,24 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 	}
 
 	return results, nil
+}
+
+// runningNow is the processes that are running, read from the machine when
+// what was read last is old enough.
+func (p *Plugin) runningNow() ([]Process, error) {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+
+	if p.cache != nil && time.Since(p.cachedAt) < processCacheAge {
+		return p.cache, nil
+	}
+
+	running, err := p.processes.Running()
+	if err != nil {
+		return nil, err
+	}
+	p.cache, p.cachedAt = running, time.Now()
+	return running, nil
 }
 
 // LoadContextMenus offers to end every instance of the same program.
@@ -235,9 +268,18 @@ func (p *Plugin) LoadContextMenus(selectedResult core.Result) []core.Result {
 				p.api.LogError("ProcessKiller", "ending a process failed: "+err.Error())
 			}
 		}
+		// The list has changed, so what was read last is left out.
+		p.forgetProcesses()
 		return true
 	}
 	return []core.Result{item}
+}
+
+// forgetProcesses leaves out what was read last, after something ended.
+func (p *Plugin) forgetProcesses() {
+	p.cacheMu.Lock()
+	p.cache, p.cachedAt = nil, time.Time{}
+	p.cacheMu.Unlock()
 }
 
 // allSamePath reports whether every result is the same program.

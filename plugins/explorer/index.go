@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"launch/core"
 )
@@ -51,26 +53,100 @@ var skippedFolders = map[string]bool{
 
 // walkIndex finds the machine's files by walking the folders the user keeps
 // their own work in.
-type walkIndex struct{}
+//
+// The walk is kept between searches, because the folders it reads do not
+// change between two keystrokes and walking them again for every one of
+// them is what makes typing feel slow. It is read again when it is old, or
+// when the user asks for it.
+type walkIndex struct {
+	mu       sync.Mutex
+	entries  []walkEntry
+	walkedAt time.Time
+	// walking is true while the folders are being read, so that only one
+	// walk runs at a time.
+	walking bool
+}
+
+// walkEntry is one file the walk found.
+type walkEntry struct {
+	path  string
+	name  string
+	isDir bool
+}
+
+// indexAge is how long a walk is used before the folders are read again.
+const indexAge = 30 * time.Second
 
 // Available reports whether a search can be made.
-func (walkIndex) Available() (bool, string) { return true, "" }
+func (w *walkIndex) Available() (bool, string) { return true, "" }
 
 // Search finds the files and folders whose name matches, best first.
-func (w walkIndex) Search(query string, limit int, excluded []string) ([]SearchResult, error) {
+func (w *walkIndex) Search(query string, limit int, excluded []string) ([]SearchResult, error) {
 	return w.find(query, limit, excluded)
 }
 
 // ContentSearch finds the files whose text matches. A walk cannot read
 // every file it passes, so a content search answers with the files whose
 // name matches, which is what the user is then offered to look in.
-func (w walkIndex) ContentSearch(query string, limit int, excluded []string) ([]SearchResult, error) {
+func (w *walkIndex) ContentSearch(query string, limit int, excluded []string) ([]SearchResult, error) {
 	return w.find(query, limit, excluded)
 }
 
-// find walks the folders a user keeps their own files in and matches the
-// names against what was typed.
-func (w walkIndex) find(query string, limit int, excluded []string) ([]SearchResult, error) {
+// Reload reads the folders again, as F5 asks.
+func (w *walkIndex) Reload() {
+	w.mu.Lock()
+	w.entries = nil
+	w.walkedAt = time.Time{}
+	w.mu.Unlock()
+}
+
+// Warm reads the folders in the background, so that the first search the
+// user makes does not have to wait for the walk.
+func (w *walkIndex) Warm() {
+	go w.refresh()
+}
+
+// entriesNow is what the walk found. Reading the folders again takes about
+// a third of a second, which must not happen while the user is typing, so
+// what was found last answers the search however old it is and the folders
+// are read again in the background. Only a search with nothing at all to
+// answer with waits for a walk.
+func (w *walkIndex) entriesNow() []walkEntry {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if len(w.entries) > 0 {
+		if time.Since(w.walkedAt) >= indexAge && !w.walking {
+			go w.refresh()
+		}
+		return w.entries
+	}
+
+	w.entries = w.walk()
+	w.walkedAt = time.Now()
+	return w.entries
+}
+
+// refresh reads the folders again and keeps what it found, in the
+// background.
+func (w *walkIndex) refresh() {
+	w.mu.Lock()
+	if w.walking {
+		w.mu.Unlock()
+		return
+	}
+	w.walking = true
+	w.mu.Unlock()
+
+	entries := w.walk()
+
+	w.mu.Lock()
+	w.entries, w.walkedAt, w.walking = entries, time.Now(), false
+	w.mu.Unlock()
+}
+
+// find matches what was typed against the files the walk found.
+func (w *walkIndex) find(query string, limit int, excluded []string) ([]SearchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
@@ -83,11 +159,89 @@ func (w walkIndex) find(query string, limit int, excluded []string) ([]SearchRes
 	// right is still offered.
 	matcher := core.StringMatcher{UserSettingSearchPrecision: core.SearchPrecisionLow}
 
+	// Every character of the query has to appear in a name, in order, for
+	// the match to have any chance; checking that first is far cheaper
+	// than scoring twenty thousand names, and rejects almost all of them.
+	needle := []rune(strings.ToLower(query))
+
 	type scored struct {
 		result SearchResult
 		score  int
 	}
 	var found []scored
+
+	for _, entry := range w.entriesNow() {
+		if inExcludedFolder(entry.path, excluded) {
+			continue
+		}
+
+		if !isSubsequence(needle, entry.name) {
+			continue
+		}
+
+		match := matcher.FuzzyMatch(query, entry.name)
+		if !match.IsSearchPrecisionScoreMet() {
+			continue
+		}
+
+		kind := ResultTypeFile
+		if entry.isDir {
+			kind = ResultTypeFolder
+		}
+		found = append(found, scored{
+			result: SearchResult{
+				FullPath:      entry.path,
+				Type:          kind,
+				Score:         match.Score(),
+				HighlightData: match.MatchData,
+			},
+			score: match.Score(),
+		})
+	}
+
+	sort.SliceStable(found, func(i, j int) bool { return found[i].score > found[j].score })
+	if len(found) > limit {
+		found = found[:limit]
+	}
+
+	results := make([]SearchResult, 0, len(found))
+	for _, entry := range found {
+		results = append(results, entry.result)
+	}
+	return results, nil
+}
+
+// isSubsequence reports whether every character of the needle appears in
+// the text, in order, whatever their case. A fuzzy match cannot succeed
+// without it.
+func isSubsequence(needle []rune, text string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+
+	at := 0
+	for _, r := range text {
+		if toLowerRune(r) == needle[at] {
+			at++
+			if at == len(needle) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// toLowerRune is the lower case of a rune, for the cheap check above.
+func toLowerRune(r rune) rune {
+	if r >= 'A' && r <= 'Z' {
+		return r + ('a' - 'A')
+	}
+	return r
+}
+
+// walk reads the folders a user keeps their own files in, once.
+func (w *walkIndex) walk() []walkEntry {
+	var entries []walkEntry
 	seen := map[string]bool{}
 	looked := 0
 
@@ -113,49 +267,23 @@ func (w walkIndex) find(query string, limit int, excluded []string) ([]SearchRes
 				}
 				return nil
 			}
-			if inExcludedFolder(path, excluded) {
-				return nil
-			}
 
 			// The folders looked in overlap, so the same file can be
 			// reached twice.
 			if seen[path] {
 				return nil
 			}
-
-			match := matcher.FuzzyMatch(query, name)
-			if !match.IsSearchPrecisionScoreMet() {
-				return nil
-			}
 			seen[path] = true
 
-			found = append(found, scored{
-				result: SearchResult{
-					FullPath:      path,
-					Type:          ResultTypeFile,
-					Score:         match.Score(),
-					HighlightData: match.MatchData,
-				},
-				score: match.Score(),
-			})
+			entries = append(entries, walkEntry{path: path, name: name})
 			return nil
 		})
 	}
-
-	sort.SliceStable(found, func(i, j int) bool { return found[i].score > found[j].score })
-	if len(found) > limit {
-		found = found[:limit]
-	}
-
-	results := make([]SearchResult, 0, len(found))
-	for _, entry := range found {
-		results = append(results, entry.result)
-	}
-	return results, nil
+	return entries
 }
 
 // roots are the folders a search looks in: the user's own folders.
-func (w walkIndex) roots() []string {
+func (w *walkIndex) roots() []string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return nil

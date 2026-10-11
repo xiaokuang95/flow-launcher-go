@@ -283,6 +283,15 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 	search := query.Search
 	matcher := p.api.Matcher()
 
+	// Every character of the query has to appear in a program's name, in
+	// order, for the match to have any chance; checking that first is far
+	// cheaper than scoring every program, and rejects most of them. The
+	// check compares letters as they are written, so it is only sound
+	// while the matcher does the same: with accents folded away, a query
+	// can match a letter a program spells with a diacritic.
+	needle := []rune(strings.ToLower(search))
+	prefilter := search != "" && !matcher.IgnoreAccents
+
 	var results []core.Result
 	for i := range p.programs {
 		program := p.programs[i]
@@ -290,6 +299,9 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 			continue
 		}
 		if p.settings.HideUninstallers && isUninstaller(program) {
+			continue
+		}
+		if prefilter && !p.mightMatch(needle, program) {
 			continue
 		}
 
@@ -302,6 +314,18 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 
 	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
 	return results, nil
+}
+
+// mightMatch is the cheap pre-check above: every character of the query has
+// to appear, in order, in one of the fields resultFor looks at, so a program
+// that fails this cannot match at all.
+func (p *Plugin) mightMatch(needle []rune, program Program) bool {
+	if isSubsequence(needle, program.DisplayName()) ||
+		isSubsequence(needle, program.Name) ||
+		isSubsequence(needle, program.ExecutableName) {
+		return true
+	}
+	return p.settings.EnableDescription && isSubsequence(needle, program.Description)
 }
 
 // resultFor is one program as a result, and whether it matched at all.
@@ -522,6 +546,34 @@ func isUninstaller(program Program) bool {
 		}
 	}
 	return false
+}
+
+// isSubsequence reports whether every character of the needle appears in
+// the text, in order, whatever their case. A fuzzy match cannot succeed
+// without it.
+func isSubsequence(needle []rune, text string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+
+	at := 0
+	for _, r := range text {
+		if lowerRune(r) == needle[at] {
+			at++
+			if at == len(needle) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// lowerRune is the lower case of a rune, for the cheap check above.
+func lowerRune(r rune) rune {
+	if r >= 'A' && r <= 'Z' {
+		return r + ('a' - 'A')
+	}
+	return r
 }
 
 // distinctLower returns the values without their duplicates, comparing

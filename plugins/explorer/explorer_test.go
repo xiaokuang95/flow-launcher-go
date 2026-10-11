@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"launch/core"
 )
@@ -259,7 +260,7 @@ func TestWalkIndexFindsFilesInTheUsersFolders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := walkIndex{}.Search("quarterly", 10, nil)
+	found, err := (&walkIndex{}).Search("quarterly", 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,12 +287,99 @@ func TestWalkIndexLeavesOutExcludedFolders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := walkIndex{}.Search("report", 10, []string{documents})
+	found, err := (&walkIndex{}).Search("report", 10, []string{documents})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(found) != 0 {
 		t.Errorf("the search found %v, want nothing from the excluded folder", found)
+	}
+}
+
+func TestWarmReadsTheFoldersInTheBackground(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+
+	documents := filepath.Join(home, "Documents")
+	if err := os.MkdirAll(documents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(documents, "quarterly-report.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	index := &walkIndex{}
+	index.Warm()
+
+	// Warm does not read the folders itself: what the walk found is there
+	// a moment later.
+	waitFor(t, func() bool {
+		found, err := index.Search("quarterly", 10, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(found) == 1
+	})
+}
+
+func TestAWalkThatIsOldIsAnsweredFromWhatItHas(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+
+	documents := filepath.Join(home, "Documents")
+	if err := os.MkdirAll(documents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(documents, "quarterly-report.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	index := &walkIndex{}
+	if _, err := index.Search("quarterly", 10, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// A file that appeared after the walk, and a walk that has gone old.
+	if err := os.WriteFile(filepath.Join(documents, "later.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	index.mu.Lock()
+	index.walkedAt = time.Now().Add(-2 * indexAge)
+	index.mu.Unlock()
+
+	// The search is answered with what the walk found, rather than waiting
+	// for the folders to be read again.
+	found, err := index.Search("later", 10, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 0 {
+		t.Errorf("the search found %d files, want the search answered from the walk that was kept", len(found))
+	}
+
+	// Which it is, in the background.
+	waitFor(t, func() bool {
+		found, err := index.Search("later", 10, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(found) == 1
+	})
+}
+
+// waitFor waits for something to become true, as a walk in the background
+// takes a moment.
+func waitFor(t *testing.T, done func() bool) {
+	t.Helper()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for !done() {
+		if time.Now().After(deadline) {
+			t.Fatal("it did not happen")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

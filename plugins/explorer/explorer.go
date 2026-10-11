@@ -143,7 +143,7 @@ func New() *Plugin {
 			HideActionKeywordPanel: true,
 			IcoPath:                "Images/explorer.png",
 		}},
-		index: walkIndex{},
+		index: &walkIndex{},
 	}
 }
 
@@ -161,6 +161,21 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 		if p.settings.QuickAccessLinks[i].Name == "" {
 			p.settings.QuickAccessLinks[i].Name = filepath.Base(p.settings.QuickAccessLinks[i].Path)
 		}
+	}
+
+	// The folders a search looks in are read now, in the background, so
+	// that the first thing the user types does not have to wait for the
+	// walk.
+	if warmer, ok := p.index.(interface{ Warm() }); ok {
+		warmer.Warm()
+	}
+	return nil
+}
+
+// ReloadData reads the folders again, as F5 asks.
+func (p *Plugin) ReloadData(ctx context.Context) error {
+	if reloadable, ok := p.index.(interface{ Reload() }); ok {
+		reloadable.Reload()
 	}
 	return nil
 }
