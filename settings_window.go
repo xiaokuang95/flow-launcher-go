@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -345,6 +346,15 @@ func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.Plugi
 			ui.Text(c, core.T("", "homePage")).FontSize(12).Width(120)
 			ui.Switch(c, &homeEnabled)
 		})
+
+		// A plugin with settings of its own is offered a way into them, as
+		// the reference's plugin list is.
+		if _, ok := pluginSettingsFor(s.app, id); ok {
+			label := strings.Replace(core.T("", "pluginSettingsWindowTitle"), "{0}", metadata.Name, 1)
+			if ui.Button(c, label).Clicked() {
+				openPluginSettingsWindow(s.app, id)
+			}
+		}
 	})
 
 	if enabled != !stored.Disabled || homeEnabled != !stored.HomeDisabled {

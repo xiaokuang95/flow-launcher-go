@@ -190,6 +190,15 @@ func (p *Plugin) resultFor(bookmark Bookmark, score int, highlight []int) core.R
 	return result
 }
 
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "Browser Bookmarks", "Settings.json", p.settings)
+}
+
 // LoadContextMenus offers the bookmark's own menu: opening it in a new
 // window, and copying where it points.
 func (p *Plugin) LoadContextMenus(selectedResult core.Result) []core.Result {

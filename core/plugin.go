@@ -82,14 +82,13 @@ type SavablePlugin interface {
 	Save()
 }
 
-// SettingProviderPlugin describes the settings it wants shown, for the
-// settings window to build controls from.
+// SettingProviderPlugin is a plugin with settings of its own, which the
+// launcher shows and changes in a window of its own: the fields of what
+// Settings returns are what the window is built from.
 type SettingProviderPlugin interface {
-	// Settings returns the plugin's settings.
+	// Settings returns the plugin's settings, which the window changes in
+	// place.
 	Settings() any
-	// SettingWindow returns a view of those settings, when the plugin draws
-	// its own.
-	SettingWindow() any
 }
 
 // ExternalPreviewPlugin shows a result's file in a window of its own.

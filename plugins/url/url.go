@@ -518,3 +518,12 @@ var errNotAURL = errorString("not a URL")
 type errorString string
 
 func (e errorString) Error() string { return string(e) }
+
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "URL", "Settings.json", p.settings)
+}

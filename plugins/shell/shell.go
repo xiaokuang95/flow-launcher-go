@@ -349,6 +349,15 @@ func (p *Plugin) prepare(command string, elevated bool) (Command, error) {
 	return Prepare(command, p.settings, elevated, p.words.T("flowlauncher_plugin_cmd_press_any_key_to_close"))
 }
 
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "Shell", "Settings.json", p.settings)
+}
+
 // LoadContextMenus adds the items the shell plugin offers on a result: run
 // it as another user, as an administrator, or copy it.
 func (p *Plugin) LoadContextMenus(selectedResult core.Result) []core.Result {

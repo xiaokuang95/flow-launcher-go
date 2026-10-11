@@ -107,6 +107,15 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 	return nil
 }
 
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "ProcessKiller", "Settings.json", p.settings)
+}
+
 // Query lists the running processes that match what the user typed, and the
 // processes whose windows they can see when nothing is typed.
 func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, error) {

@@ -303,3 +303,12 @@ func privateOrNil(private bool) *bool {
 func looksLikePath(search string) bool {
 	return strings.ContainsAny(search, `/\`) || strings.Contains(search, ":\\")
 }
+
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "WebSearch", "Settings.json", p.settings)
+}

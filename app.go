@@ -164,6 +164,7 @@ func (a *app) hooks() core.Hooks {
 		FocusQueryTextBox:   func() { a.focusQuery() },
 		IsMainWindowVisible: func() bool { return a.win != nil && a.win.IsVisible() },
 		OpenSettingDialog:   func() { openSettingsWindow(a) },
+		OpenPluginSettings:  func(pluginID string) bool { return openPluginSettingsWindow(a, pluginID) },
 		SaveAppAllSettings:  func() { a.saveSettings() },
 		SavePluginSettings:  func() { a.plugins.Save() },
 		ReloadAllPluginData: a.reloadPluginData,

@@ -473,3 +473,12 @@ var commandIcons = map[string]string{
 	"Toggle Game Mode":                   "Images/app.png",
 	"Set Flow Launcher Theme":            "Images/app.png",
 }
+
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "Sys", "Settings.json", p.settings)
+}

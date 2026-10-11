@@ -337,3 +337,14 @@ func (p *Plugin) on(k kind) bool {
 		return p.settings.SearchActionKeywordEnabled
 	}
 }
+
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "Explorer", "Settings.json", p.settings)
+}
+
+// ReloadData reads the folders again, as F5 asks.

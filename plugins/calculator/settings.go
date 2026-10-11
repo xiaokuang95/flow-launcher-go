@@ -120,3 +120,12 @@ func loadSettings(api *core.PublicAPI) Settings {
 func saveSettings(api *core.PublicAPI, settings Settings) {
 	_ = core.SaveSettingJsonStorage(api, "Calculator", "Settings.json", settings)
 }
+
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "Calculator", "Settings.json", p.settings)
+}

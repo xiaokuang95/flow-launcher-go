@@ -674,3 +674,14 @@ func distinctLower(values []string) []string {
 	}
 	return out
 }
+
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "Program", "Settings.json", p.settings)
+}
+
+// ReloadData looks the programs up again, as F5 asks.

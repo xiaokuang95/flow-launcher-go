@@ -250,6 +250,37 @@ func TestContextMenuOffersRunningItAnotherWay(t *testing.T) {
 	}
 }
 
+func TestASettingChangedFromTheWindowIsSaved(t *testing.T) {
+	plugin, _ := newTestPlugin(t)
+
+	// The launcher asks the plugin for its settings and changes one of the
+	// fields of what it hands over, which is what the settings window does.
+	fields := core.SettingFields(plugin.Settings())
+	changed := false
+	for _, field := range fields {
+		if field.Key != "EnablePathSource" {
+			continue
+		}
+		if field.Value() != false {
+			t.Fatalf("EnablePathSource starts %v, want the reference's default", field.Value())
+		}
+		if err := field.Set(true); err != nil {
+			t.Fatal(err)
+		}
+		changed = true
+	}
+	if !changed {
+		t.Fatalf("the form has no EnablePathSource: %v", fields)
+	}
+
+	plugin.Save()
+
+	saved := core.LoadSettingJsonStorage[Settings](plugin.api, "Program", "Settings.json")
+	if !saved.EnablePathSource {
+		t.Errorf("the setting was not saved: %+v", saved)
+	}
+}
+
 func TestAProgramNamedInChineseIsFoundByItsPinyin(t *testing.T) {
 	programs := []Program{{
 		Name: "微信", FullPath: `C:\Program Files\WeChat\WeChat.exe`,

@@ -89,6 +89,15 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 	return nil
 }
 
+// Settings hands the plugin's settings over, which the launcher shows and
+// changes in a window of its own.
+func (p *Plugin) Settings() any { return &p.settings }
+
+// Save writes the settings out.
+func (p *Plugin) Save() {
+	_ = core.SaveSettingJsonStorage(p.api, "Plugins Manager", "Settings.json", p.settings)
+}
+
 // Query answers what the user typed: the three things the plugin does when
 // nothing else is typed, and what each of them then answers with.
 func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, error) {
