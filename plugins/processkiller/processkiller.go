@@ -11,6 +11,12 @@ import (
 	"launch/core"
 )
 
+// The pictures this plugin shows its results with, which the launcher
+// reads from the plugin's own directory.
+//
+//go:embed Images/*.png
+var images embed.FS
+
 // The process killer's own words.
 //
 //go:embed Languages/*.xaml
@@ -100,7 +106,17 @@ func New() *Plugin {
 }
 
 // Init reads the process killer's settings.
+// installImages writes the pictures this plugin ships where the launcher
+// reads them from, which is the plugin's own directory.
+func (p *Plugin) installImages(ctx *core.PluginInitContext) {
+	if err := core.InstallImages(ctx.CurrentPluginMetadata.PluginDirectory, images, "Images/*.png"); err != nil {
+		ctx.API.LogError("processkiller", "writing the plugin's pictures failed: "+err.Error())
+	}
+}
+
+// Init reads the plugin's settings.
 func (p *Plugin) Init(ctx *core.PluginInitContext) error {
+	p.installImages(ctx)
 	p.api = ctx.API
 	p.words = core.NewPluginTranslator(languages, "Languages")
 	p.settings = core.LoadSettingJsonStorage[Settings](ctx.API, "ProcessKiller", "Settings.json")
