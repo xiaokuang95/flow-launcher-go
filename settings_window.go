@@ -63,6 +63,7 @@ func openSettingsWindow(a *app) {
 func (s *settingsWindow) view(c *ui.Context) {
 	// The settings wear the theme the user is choosing, so that a theme is
 	// seen as it is picked rather than after the window is closed.
+	s.app.systemIsDark = c.Theme().Dark
 	s.app.applyTheme(c)
 	t := c.Theme()
 

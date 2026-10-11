@@ -9,6 +9,8 @@ package core
 // it leaves out is taken from the theme the launcher draws with.
 type ThemeColors struct {
 	Background         string
+	BackgroundLight    string
+	BackgroundDark     string
 	Border             string
 	Title              string
 	Subtitle           string
@@ -31,6 +33,8 @@ var ReferenceThemes = []ReferenceTheme{
 		IsDark:   false,
 		HasBlur:  true,
 		Colors: ThemeColors{
+			BackgroundLight:    "#000000B0",
+			BackgroundDark:     "#000000B6",
 			Border:             "#444444",
 			Title:              "#FFFFFFFF",
 			Subtitle:           "#FFFFFFFF",
@@ -48,6 +52,8 @@ var ReferenceThemes = []ReferenceTheme{
 		IsDark:   false,
 		HasBlur:  true,
 		Colors: ThemeColors{
+			BackgroundLight:    "#000000C7",
+			BackgroundDark:     "#000000C7",
 			Border:             "#444444",
 			Title:              "#FFFFFFFF",
 			Subtitle:           "#FFFFFFFF",
@@ -65,6 +71,8 @@ var ReferenceThemes = []ReferenceTheme{
 		IsDark:   false,
 		HasBlur:  true,
 		Colors: ThemeColors{
+			BackgroundLight:  "#FAFAFABF",
+			BackgroundDark:   "#FAFAFABF",
 			Border:           "#aaaaaa",
 			Title:            "#000000FF",
 			Subtitle:         "#00000085",
@@ -81,6 +89,8 @@ var ReferenceThemes = []ReferenceTheme{
 		IsDark:   true,
 		HasBlur:  true,
 		Colors: ThemeColors{
+			BackgroundLight:  "#FAFAFACE",
+			BackgroundDark:   "#202020D6",
 			TitleSelected:    "#ffffff",
 			SubtitleSelected: "#ffffff",
 		},
@@ -319,13 +329,19 @@ var ReferenceThemes = []ReferenceTheme{
 		Name:     "Windows 10",
 		IsDark:   true,
 		HasBlur:  false,
-		Colors:   ThemeColors{},
+		Colors: ThemeColors{
+			BackgroundLight: "#FAFAFAFF",
+			BackgroundDark:  "#202020FF",
+		},
 	},
 	{
 		FileName: "Win11Light",
 		Name:     "Windows 11",
 		IsDark:   true,
 		HasBlur:  true,
-		Colors:   ThemeColors{},
+		Colors: ThemeColors{
+			BackgroundLight: "#FAFAFACE",
+			BackgroundDark:  "#202020D6",
+		},
 	},
 }

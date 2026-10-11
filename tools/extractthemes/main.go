@@ -171,6 +171,13 @@ func readColors(content []byte, result *theme) error {
 				if key != "" {
 					currentKey = key
 				}
+			case "Color":
+				// A colour of its own rather than a brush: a theme names
+				// the window's background this way, once for a light
+				// desktop and once for a dark one.
+				if key := attribute(element, "Key"); key != "" {
+					currentKey = key
+				}
 			case "Setter":
 				currentProperty = attribute(element, "Property")
 				if value := attribute(element, "Value"); value != "" {
@@ -209,6 +216,13 @@ func record(result *theme, key, property, value string) {
 		result.Colors["selectedBackground"] = value
 	case "HighlightStyle":
 		result.Colors["highlight"] = value
+	// The window's own background, which a theme names twice: once for a
+	// light desktop and once for a dark one, of which the reference picks
+	// by the user's colour scheme.
+	case "LightBG":
+		result.Colors["backgroundLight"] = value
+	case "DarkBG":
+		result.Colors["backgroundDark"] = value
 	default:
 		if property == "" {
 			return
@@ -280,9 +294,9 @@ type ThemeColors struct {
 `, source)
 
 	names := []string{
-		"background", "border", "title", "subtitle", "titleSelected", "subtitleSelected",
-		"selectedBackground", "queryForeground", "highlight", "scrollbar",
-		"previewTitle", "previewSubtitle",
+		"background", "backgroundLight", "backgroundDark", "border", "title", "subtitle",
+		"titleSelected", "subtitleSelected", "selectedBackground", "queryForeground",
+		"highlight", "scrollbar", "previewTitle", "previewSubtitle",
 	}
 	for _, name := range names {
 		fmt.Fprintf(output, "\t%s string\n", exported(name))

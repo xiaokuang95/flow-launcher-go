@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"path/filepath"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -49,7 +49,18 @@ func storeOf(t *testing.T, count int) (*app, *storeReader) {
 		})
 	}
 
-	store := core.NewPluginStore("0.1.0", filepath.Join(t.TempDir(), "store.json"))
+	// The store writes the list it read to its cache file, which it does on
+	// the goroutine that read it: the file is put somewhere that outlives
+	// the test rather than in the test's own directory, which is taken away
+	// as soon as the test is over.
+	cache, err := os.CreateTemp("", "flow-launcher-store-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.Close()
+	os.Remove(cache.Name())
+
+	store := core.NewPluginStore("0.1.0", cache.Name())
 	store.Client = &http.Client{Transport: reader}
 
 	a := &app{store: store, settings: core.DefaultSettings()}

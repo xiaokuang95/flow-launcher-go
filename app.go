@@ -89,6 +89,10 @@ type app struct {
 
 	// updateMu stands in for the main thread when there is no window.
 	updateMu sync.Mutex
+
+	// systemIsDark is the desktop's own appearance, read while a frame was
+	// drawn on the thread that can answer.
+	systemIsDark bool
 }
 
 // newApp makes the launcher and loads everything it needs: the settings,
@@ -231,6 +235,10 @@ func (a *app) hooks() core.Hooks {
 
 // view builds the launcher window.
 func (a *app) view(c *ui.Context) {
+	// The desktop's own appearance is read here, where a frame is drawn on
+	// the thread that can answer, and kept for the calls that cannot ask:
+	// mygo's theme answers on the main thread and waits for it.
+	a.systemIsDark = c.Theme().Dark
 	a.applyTheme(c)
 	a.searchIfChanged()
 	a.resizeWindow(c)
@@ -373,6 +381,11 @@ func (a *app) refreshPluginManifest() {
 
 // applyTheme paints the theme the user chose onto the widgets, which the
 // launcher's own "System" theme leaves as the desktop's.
+//
+// A theme may draw on either a light or a dark desktop, so which of its two
+// backgrounds to use is what the user's colour scheme says, as the reference
+// reads it: the scheme they chose, and the desktop's own when they left it
+// to the system.
 func (a *app) applyTheme(c *ui.Context) {
 	if a.settings.Theme == core.DefaultThemeName {
 		return
@@ -383,8 +396,20 @@ func (a *app) applyTheme(c *ui.Context) {
 	}
 
 	theme := *c.Theme()
-	core.PaintTheme(&theme, reference)
+	core.PaintTheme(&theme, reference, a.darkTheme(a.systemIsDark))
 	c.SetTheme(&theme)
+}
+
+// darkTheme reports whether the launcher is drawn dark: the colour scheme
+// the user chose, and the desktop's own when they left it to the system.
+func (a *app) darkTheme(systemIsDark bool) bool {
+	switch strings.ToLower(a.settings.ColorScheme) {
+	case "dark":
+		return true
+	case "light":
+		return false
+	}
+	return systemIsDark
 }
 
 // updatePluginManifest reads the plugin store, and keeps what it read so
