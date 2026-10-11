@@ -170,6 +170,13 @@ type Program struct {
 	UniqueIdentifier string `json:"UniqueIdentifier"`
 	// Enabled is false for a program the user hid.
 	Enabled bool `json:"Enabled"`
+
+	// AppUserModelID is what the shell runs a Windows app installed from
+	// the store by, and is empty for a program that is a file.
+	AppUserModelID string `json:"AppUserModelID"`
+	// CanRunElevated is true for a store app that asked to be able to run
+	// as an administrator.
+	CanRunElevated bool `json:"CanRunElevated"`
 }
 
 // DisplayName is what the program is called in a result.
@@ -188,6 +195,16 @@ func (p Program) ProgramFile() string {
 		return p.LnkResolvedPath
 	}
 	return p.FullPath
+}
+
+// RunTarget is what the shell is asked to run: a Windows app installed
+// from the store is not a file, so it is run by the application user model
+// id the shell knows it by.
+func (p Program) RunTarget() string {
+	if p.AppUserModelID != "" {
+		return `shell:AppsFolder\` + p.AppUserModelID
+	}
+	return p.ProgramFile()
 }
 
 // Finder looks for the programs on the machine. It is what the plugin reads
@@ -411,16 +428,33 @@ func (p *Plugin) resultFor(program Program, search string, matcher core.StringMa
 	result.Action = func(action core.ActionContext) bool {
 		switch {
 		case action.SpecialKeyState.CtrlPressed && !action.SpecialKeyState.ShiftPressed:
-			// Ctrl+Enter opens where the program lives.
+			// Ctrl+Enter opens where the program lives. A store app is not
+			// a file to pick out, so the folder itself is opened.
+			if program.AppUserModelID != "" {
+				p.api.OpenDirectory(program.FullPath, "")
+				return true
+			}
 			p.api.OpenDirectory(program.ParentDirectory, program.FullPath)
 		case action.SpecialKeyState.CtrlPressed && action.SpecialKeyState.ShiftPressed:
-			p.run(program, arguments, true)
+			p.runElevated(program, arguments)
 		default:
 			p.run(program, arguments, false)
 		}
 		return true
 	}
 	return result, true
+}
+
+// runElevated runs a program as an administrator, which a store app only
+// allows when the package said it may.
+func (p *Plugin) runElevated(program Program, arguments string) {
+	if program.AppUserModelID != "" && !program.CanRunElevated {
+		p.api.ShowMsgError(
+			p.words.T("flowlauncher_plugin_program_disable_dlgtitle_error"),
+			p.words.T("flowlauncher_plugin_program_run_as_administrator_not_supported_message"))
+		return
+	}
+	p.run(program, arguments, true)
 }
 
 // run starts a program.
@@ -449,6 +483,13 @@ func (p *Plugin) LoadContextMenus(selectedResult core.Result) []core.Result {
 		return nil
 	}
 	words := p.words
+
+	// A store app is not a file, so it is not run as another user and has
+	// no program of its own to open: it is offered where it is installed,
+	// and running it elevated when its package allows that.
+	if program.AppUserModelID != "" {
+		return p.uwpContextMenus(program)
+	}
 
 	differentUser := core.NewResult(words.T("flowlauncher_plugin_program_run_as_different_user"), "", "Images/user.png", 0)
 	differentUser.Glyph = &core.GlyphInfo{FontFamily: "Segoe Fluent Icons", Glyph: "\ue7ee"}
@@ -493,6 +534,31 @@ func (p *Plugin) LoadContextMenus(selectedResult core.Result) []core.Result {
 	}
 	items = append(items, hide)
 
+	return items
+}
+
+// uwpContextMenus are what can be done with a Windows app installed from
+// the store, which the reference offers the same way: where it is
+// installed, and running it as an administrator when its package allows
+// that.
+func (p *Plugin) uwpContextMenus(program Program) []core.Result {
+	folder := core.NewResult(p.words.T("flowlauncher_plugin_program_open_containing_folder"), "", "Images/folder.png", 0)
+	folder.Glyph = &core.GlyphInfo{FontFamily: "Segoe Fluent Icons", Glyph: ""}
+	folder.Action = func(core.ActionContext) bool {
+		p.api.OpenDirectory(program.FullPath, "")
+		return true
+	}
+
+	items := []core.Result{folder}
+	if program.CanRunElevated {
+		administrator := core.NewResult(p.words.T("flowlauncher_plugin_program_run_as_administrator"), "", "Images/cmd.png", 0)
+		administrator.Glyph = &core.GlyphInfo{FontFamily: "Segoe Fluent Icons", Glyph: ""}
+		administrator.Action = func(core.ActionContext) bool {
+			p.runElevated(program, program.Args)
+			return true
+		}
+		items = append(items, administrator)
+	}
 	return items
 }
 

@@ -8,6 +8,10 @@ import "errors"
 // that registry.
 func appPathsPrograms() []string { return nil }
 
+// uwpPrograms are the Windows apps installed from the store, which only
+// Windows has.
+func uwpPrograms() []Program { return nil }
+
 // fileDescription is what a program says it does. Only Windows keeps that
 // beside the program.
 func fileDescription(string) string { return "" }

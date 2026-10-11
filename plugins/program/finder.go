@@ -44,6 +44,14 @@ func (f systemFinder) Find(settings Settings) ([]Program, error) {
 		}
 	}
 
+	// The Windows apps installed from the store are not files, so they are
+	// not found by looking at any folder.
+	if settings.EnableUwpSource {
+		for _, program := range uwpPrograms() {
+			add(program)
+		}
+	}
+
 	if settings.EnablePathSource {
 		for _, directory := range filepath.SplitList(os.Getenv("PATH")) {
 			for _, path := range findFiles(directory, suffixes) {
@@ -69,7 +77,7 @@ func (f systemFinder) Find(settings Settings) ([]Program, error) {
 
 // Start runs a program.
 func (systemFinder) Start(program Program, arguments string, runAsAdmin bool) error {
-	return startProgram(program.ProgramFile(), program.ParentDirectory, arguments, runAsAdmin)
+	return startProgram(program.RunTarget(), program.ParentDirectory, arguments, runAsAdmin)
 }
 
 // StartAsDifferentUser runs one as another user.
