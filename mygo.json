@@ -1,0 +1,6 @@
+{
+  "name": "Flow Launcher",
+  "identifier": "com.example.flowlauncher",
+  "version": "0.1.0",
+  "out": "build"
+}

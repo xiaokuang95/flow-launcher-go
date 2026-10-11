@@ -1,0 +1,11 @@
+# The launcher as it is built, and the pictures taken of it while it is
+# built.
+/launch.exe
+/build/
+/.mygo/
+/shot*.png
+
+# The oracle is a C# project beside the Go one; what it builds is not part
+# of the source.
+/tools/oracle/bin/
+/tools/oracle/obj/
