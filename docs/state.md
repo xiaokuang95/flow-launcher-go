@@ -95,6 +95,14 @@ starting at login, and game mode
 
 ## What is not done
 
+- **The machine's own context menu for a file.** The reference's explorer
+  shows the shell's right-click menu over a result (`Helper/ShellContextMenu.cs`,
+  1613 lines of `IShellFolder` and `IContextMenu`), and can inline those
+  items into the launcher's own menu
+  (`Helper/ShellContextMenuDisplayHelper.cs`, 524 lines). Neither is here,
+  so Alt over an explorer result opens the file rather than offering the
+  shell's menu, and the menu has no "Show the Windows context menu" item.
+  The rest of the explorer's menu is there (`plugins/explorer/contextmenu.go`).
 - **DialogJump (Alt+G)**: the shell's `Shell.Application` object answered
   `DISP_E_MEMBERNOTFOUND` to every late-bound `Invoke`, whatever the
   locale, the class context or the argument description (all checked
@@ -107,6 +115,53 @@ starting at login, and game mode
   download and unpack was checked (the store's *Power Plans*), but the
   whole "the user installs it and it is there after a restart" path has
   not been walked.
+
+## What the reference has and this launcher now has too
+
+These were missing and were filled in, one commit each:
+
+- **The explorer's own context menu** (`plugins/explorer/contextmenu.go`):
+  open with the editor, the folder editor or the shell the user chose,
+  open the containing folder, the machine's Open With list, pin to the
+  quick access links or unpin, copy the path, the name or the item itself,
+  delete (after asking), leave a folder out of the next searches, and run
+  a program as another user. Removing something is behind
+  `Plugin.deleter`, so a test watches what was asked for.
+- **The plugins manager's menu** (`plugins/pluginsmanager/contextmenu.go`):
+  a store plugin's website, source code, issue list and the repository
+  every plugin of the store is listed in.
+- **The Windows apps installed from the store** (`plugins/program/uwp_windows.go`):
+  what each is called comes from the shell's own list of the apps the
+  Start menu shows (`Get-StartApps`), since a package names its apps with
+  a resource reference; the rest is read from the package's manifest. The
+  shell runs one by its application user model id, so `Program.RunTarget`
+  answers `shell:AppsFolder\<id>`. 24 apps on this machine, 3.0 s to
+  index, in the index that is kept for thirty hours.
+- **Pinyin** (`core/pinyin.go`): a name written in Chinese is found by
+  typing it in Latin letters, with the reference's own settings
+  (`ShouldUsePinyin`, `UseDoublePinyin`, `DoublePinyinSchema`,
+  `UsePolyphonicPhraseOverrides`), its phrase readings and its double
+  pinyin tables. The readings come from `github.com/mozillazg/go-pinyin`,
+  the library the reference's own reader is built from. The cheap
+  in-order check a search makes before scoring a name now checks what the
+  matcher will compare the name with, and the explorer searches with the
+  launcher's own matcher, so a file called 工作报告 is found by gongzuo.
+- **A plugin's own settings** (`plugin_settings_window.go`,
+  `core/settingsform.go`): a plugin hands its settings over and the
+  window is built from the fields of that value. Ten plugins do, so the
+  program plugin's switches no longer have to be changed by editing JSON.
+- **The keys the launcher answers to** (`hotkeys.go`): the settings decide
+  them, written the way the reference writes them ("Ctrl + Tab", "F1"),
+  and the hotkey page offers each one. A setting that cannot be read binds
+  nothing rather than binding the wrong key.
+- **The pictures the built-in plugins name** (`core/pluginimages.go`):
+  each plugin ships the reference's own and writes them into its directory
+  when it is initialized, once. Before this, a result whose icon came from
+  its plugin was drawn as an empty box.
+- **The settings the interface reads** (`core/settings.go`): the faces the
+  query box and the results are drawn in, the size of a result's subtitle,
+  glyph icons, badges and whether they are only for the global plugins, the
+  log level, and how often the launcher has been opened.
 
 ## Traps worth remembering
 
@@ -195,10 +250,13 @@ programs, now spends 0.6 ms on 201 of them.
 
 ## While working on it
 
-- The repository is https://github.com/xiaokuang95/flow-launcher-go. Three
-  commits so far: the port itself, the README and licence, and the speed
-  work (`app.go`, `plugins/explorer/`, `plugins/program/`,
-  `plugins/processkiller/`, `plugins.go` and this file).
+- The repository is https://github.com/xiaokuang95/flow-launcher-go. The
+  port itself and the README came first; then the speed work, the
+  explorer's and the plugins manager's context menus, the store apps, the
+  pinyin, a plugin's own settings window, the keys read from the settings,
+  the built-in plugins' pictures, and the settings the interface reads.
+- **The launcher is built with `-ldflags="-H=windowsgui"`**, so that no
+  console window appears beside it (see Traps below).
 - **A test must never really do something to the machine.** Every platform
   action lives behind an injectable field (`sys.Machine`, `shell.Runner`,
   `processkiller.Processes`, `url.Opener`, `program.Finder`,
