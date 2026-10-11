@@ -161,6 +161,15 @@ These were missing and were filled in, one commit each:
   fills it with (18 and 29 on this machine); showing the menu and running
   what is chosen was checked once by hand, since a menu waits for the user
   and a test must not open one.
+- **The plugin store page draws only what is on the screen**
+  (`settings_window.go`): it drew every plugin of the store every frame
+  (349 rows, 11.3 ms a frame), and what it drew came from a hook that
+  reads the store over the network when its list is old, on the thread the
+  window lives on — which is what made the page slow and, with a slow
+  store, froze the launcher. The list is given the room left in the window
+  so only the rows that fit are built (22 rows, 2.5 ms a frame), the
+  window answers with what has been read and asks for a fresh list in the
+  background, and the list has a search box.
 - **The pictures the built-in plugins name** (`core/pluginimages.go`):
   each plugin ships the reference's own and writes them into its directory
   when it is initialized, once. Before this, a result whose icon came from
@@ -245,6 +254,11 @@ programs, now spends 0.6 ms on 201 of them.
   there, so the change reaches a fresh install only.
 
 ## Known problems
+
+- **The settings window's plugins page draws every plugin row every
+  frame**, the way the plugin store page did (see the store's own entry
+  below). It holds a dozen or two plugins rather than hundreds, so it has
+  not been changed; a user with a hundred plugins installed would feel it.
 
 - `go vet` reports four `possible misuse of unsafe.Pointer` in
   `core/com_windows.go`. They are addresses the system handed back, turned
