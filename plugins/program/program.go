@@ -86,16 +86,19 @@ var (
 	}
 )
 
-// DefaultSettings are the settings a user who changed nothing gets.
+// DefaultSettings are the settings a user who changed nothing gets, which
+// are the reference's own: the Start Menu and the registry are looked in,
+// the PATH is not, and a result is the program's name alone.
 func DefaultSettings() Settings {
 	return Settings{
 		BuiltinSuffixesStatus:  map[string]bool{"exe": true, "appref-ms": true, "lnk": true},
 		BuiltinProtocolsStatus: map[string]bool{"steam": true, "epic": true, "http": false},
 		EnableRegistrySource:   true,
 		EnableStartMenuSource:  true,
-		EnablePathSource:       true,
+		EnablePathSource:       false,
 		EnableUwpSource:        true,
-		EnableDescription:      true,
+		EnableDescription:      false,
+		HideAppsPath:           true,
 	}
 }
 

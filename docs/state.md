@@ -156,23 +156,23 @@ it, and all five are fixed.
   (`Plugin.runningNow`) and dropped when something is ended.
 
 Measured with all twelve plugins loaded, median of seven runs, each query
-asked once before it is measured: `c` 32 ms, `ch` 15 ms, `chr` 12 ms,
-`chrome` 7 ms, `README` 11 ms, `s` 1 ms, `kill` 1 ms, `b` 0.5 ms. What is
-left of `c` is the explorer scoring its 20,000 files (26 ms) and the
-program plugin scoring its 8,600 programs (14 ms), which the engine runs
-at the same time.
+asked once before it is measured: `c` 30 ms, `ch` 17 ms, `chr` 14 ms,
+`chrome` 8 ms, `README` 12 ms, `s` 1.7 ms, `kill` 1.5 ms, `b` 0.6 ms. What
+is left of `c` is the explorer scoring its 20,000 files (26 ms); the
+program plugin, which used to spend 14 ms of the same time on 8,600
+programs, now spends 0.6 ms on 201 of them.
+
+- **The program plugin's defaults were not the reference's.** The
+  reference starts with `EnableDescription` false, `HideAppsPath` true and
+  `EnablePathSource` false, and `DefaultSettings` had them true, false,
+  true. Indexing the `PATH` is what turned 200 programs into 8,600, which
+  cost 14 ms of every program search. They are the reference's own now. A
+  machine that already has
+  `Settings/Plugins/Plugins/Program/Settings.json` keeps what is written
+  there, so the change reaches a fresh install only.
 
 ## Known problems
 
-- **The program plugin's defaults are not the reference's.** The reference
-  starts with `EnableDescription` false, `HideAppsPath` true and
-  `EnablePathSource` false; `plugins/program/program.go`'s
-  `DefaultSettings` has them true, false, true. The last one matters most:
-  indexing the `PATH` is what turns 200 programs into the 8,600 this
-  machine has, and it is most of what a program search costs. The three
-  were written that way in the first commit and are not among the
-  deliberate differences above. Whether to match the reference, which
-  changes what the user sees, has not been decided.
 - `go vet` reports four `possible misuse of unsafe.Pointer` in
   `core/com_windows.go`. They are addresses the system handed back, turned
   into pointers again, which Go cannot tell apart from its own; the comment

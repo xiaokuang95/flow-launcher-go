@@ -81,6 +81,7 @@ func titlesOf(results []core.Result) []string {
 
 func TestQueryFindsAProgramByName(t *testing.T) {
 	plugin, _ := newTestPlugin(t, sample()...)
+	plugin.settings.HideAppsPath = false
 
 	results, err := plugin.Query(context.Background(), core.Query{Search: "chrome"})
 	if err != nil {
@@ -256,6 +257,7 @@ func TestDescriptionIsShownAndSearched(t *testing.T) {
 		UniqueIdentifier: "vlc", Enabled: true,
 	}}
 	plugin, _ := newTestPlugin(t, programs...)
+	plugin.settings.EnableDescription = true
 
 	results, _ := plugin.Query(context.Background(), core.Query{Search: "media"})
 	if len(results) != 1 {
