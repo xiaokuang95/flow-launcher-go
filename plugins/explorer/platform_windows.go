@@ -3,9 +3,12 @@
 package explorer
 
 import (
+	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -58,13 +61,61 @@ func creationTime(info os.FileInfo) time.Time {
 // openFile opens a file in the program it belongs to.
 func openFile(path string) { openWithShell(path) }
 
+// openIn opens a path in a program the user chose.
+func (p *Plugin) openIn(program, path string) error {
+	return exec.Command(program, path).Start()
+}
+
+// openFolderIn opens a folder in the program the user chose, with the
+// folder as the program's own folder.
+func (p *Plugin) openFolderIn(program, path string) error {
+	command := exec.Command(program)
+	command.Dir = path
+	return command.Start()
+}
+
+// openWithMenu shows the machine's own list of programs a file can be
+// opened with, which is what the shell's Open With dialog is.
+func openWithMenu(path string) {
+	systemDirectory, err := windowsDirectory()
+	if err != nil {
+		return
+	}
+	command := exec.Command("rundll32.exe", filepath.Join(systemDirectory, "shell32.dll")+",OpenAs_RunDLL "+path)
+	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = command.Start()
+}
+
+// runAsDifferentUser runs a file as another user, which the shell asks for
+// with the runasuser verb.
+func runAsDifferentUser(path string) error {
+	command := exec.Command("powershell.exe", "-NoProfile", "-Command",
+		"Start-Process -FilePath "+quoteForPowerShell(path)+" -Verb RunAsUser")
+	return command.Start()
+}
+
+// quoteForPowerShell writes a path so that PowerShell reads it as one
+// argument, whatever is in it.
+func quoteForPowerShell(path string) string {
+	return "'" + strings.ReplaceAll(path, "'", "''") + "'"
+}
+
+// windowsDirectory is where the system's own programs live.
+func windowsDirectory() (string, error) {
+	directory := os.Getenv("SystemRoot")
+	if directory == "" {
+		return "", errors.New("SystemRoot is not set")
+	}
+	return filepath.Join(directory, "System32"), nil
+}
+
 // openInEditor opens a file in the editor the user chose.
 func (p *Plugin) openInEditor(path string) {
 	if p.settings.EditorPath == "" {
 		openWithShell(path)
 		return
 	}
-	_ = exec.Command(p.settings.EditorPath, path).Start()
+	_ = p.openIn(p.settings.EditorPath, path)
 }
 
 // openWithShell shows a folder in the file manager, or a file's own menu.

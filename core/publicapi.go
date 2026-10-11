@@ -664,15 +664,14 @@ func (a *PublicAPI) LogException(className, message string, err error) {
 	a.Logger.Error(className, message+": "+err.Error())
 }
 
-// Logger writes the launcher's log file. The file is opened when the first
-// line is written, so that a launcher that logs nothing makes no file, and
-// a test that logs nothing holds none open.
+// Logger writes the launcher's log file. The file is opened for each line
+// and closed again, so that a launcher that logs nothing makes no file, and
+// so that a test that logs does not hold a file open under a directory it
+// is about to remove.
 type Logger struct {
 	dir string
 
-	mu   sync.Mutex
-	file *os.File
-	path string
+	mu sync.Mutex
 }
 
 // NewLogger makes a logger writing under a directory.
@@ -687,18 +686,17 @@ func (l *Logger) write(level, className, message string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.file == nil {
-		if err := os.MkdirAll(l.dir, 0o755); err != nil {
-			return
-		}
-		l.path = filepath.Join(l.dir, "Log_"+time.Now().Format("2006-01-02")+".txt")
-		file, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-		if err != nil {
-			return
-		}
-		l.file = file
+	if err := os.MkdirAll(l.dir, 0o755); err != nil {
+		return
 	}
-	_, _ = l.file.WriteString(line)
+	path := filepath.Join(l.dir, "Log_"+time.Now().Format("2006-01-02")+".txt")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	_, _ = file.WriteString(line)
 }
 
 // Debug writes a line to the log.
@@ -712,14 +710,6 @@ func (l *Logger) Warn(className, message string) { l.write("WARN", className, me
 
 // Error writes a line to the log.
 func (l *Logger) Error(className, message string) { l.write("ERROR", className, message) }
-
-// Close closes the log file.
-func (l *Logger) Close() {
-	if l == nil || l.file == nil {
-		return
-	}
-	_ = l.file.Close()
-}
 
 // --- Plugin settings storage ---
 

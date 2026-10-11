@@ -127,6 +127,9 @@ type Plugin struct {
 	words    *core.PluginTranslator
 	// index finds the files on the machine.
 	index FileIndex
+	// deleter removes what the user asks to remove, kept behind a field so
+	// that a test watches what was asked for rather than losing a file.
+	deleter Deleter
 }
 
 // New makes the explorer.
@@ -143,7 +146,8 @@ func New() *Plugin {
 			HideActionKeywordPanel: true,
 			IcoPath:                "Images/explorer.png",
 		}},
-		index: &walkIndex{},
+		index:   &walkIndex{},
+		deleter: systemDeleter{},
 	}
 }
 

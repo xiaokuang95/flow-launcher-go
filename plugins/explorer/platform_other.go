@@ -3,6 +3,7 @@
 package explorer
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -50,7 +51,29 @@ func (p *Plugin) openInEditor(path string) {
 		openWithShell(path)
 		return
 	}
-	_ = exec.Command(p.settings.EditorPath, path).Start()
+	_ = p.openIn(p.settings.EditorPath, path)
+}
+
+// openIn opens a path in a program the user chose.
+func (p *Plugin) openIn(program, path string) error {
+	return exec.Command(program, path).Start()
+}
+
+// openFolderIn opens a folder in the program the user chose, with the
+// folder as the program's own folder.
+func (p *Plugin) openFolderIn(program, path string) error {
+	command := exec.Command(program)
+	command.Dir = path
+	return command.Start()
+}
+
+// openWithMenu and runAsDifferentUser are the machine's own ways of
+// opening a file with something else and of running it as somebody else,
+// which are only there on Windows.
+func openWithMenu(string) {}
+
+func runAsDifferentUser(string) error {
+	return errors.New("running a file as another user is only supported on Windows")
 }
 
 // openWithShell opens a folder in the file manager, or a file in its own
