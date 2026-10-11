@@ -11,8 +11,14 @@ A port of [Flow Launcher](https://github.com/Flow-Launcher/Flow.Launcher)
 go build ./... && go vet ./... && go test ./core/ ./plugins/...
 CGO_ENABLED=0 GOOS=linux go build ./... && CGO_ENABLED=0 GOOS=darwin go build ./...
 
+# The launcher is built as a Windows application rather than a console
+# program, so that no black window appears beside it. Build it with
+# -H=windowsgui for anything that is looked at.
+go build -ldflags="-H=windowsgui" -o launch.exe .
+
 # Run a query without a window, to see the results, their scores and the
-# plugin that found them.
+# plugin that found them. The output has to be piped or sent to a file:
+# a Windows application has no console to print to.
 ./launch.exe --query "chrome"
 ./launch.exe --query "2+2" --run          # run the first result
 
@@ -104,6 +110,11 @@ starting at login, and game mode
 
 ## Traps worth remembering
 
+- **The launcher has to be built with `-ldflags="-H=windowsgui"`.** Go
+  builds a console program by default, and Windows then puts a black
+  console window beside the launcher for as long as it runs. The cost is
+  that a query on the command line prints nothing unless its output is
+  piped or sent to a file, so the checks above do that.
 - **`view()` must call `applyTheme`.** It was dropped once while removing
   debug code and the theme silently stopped working — the picture was
   byte for byte the same as before, which is what gave it away.

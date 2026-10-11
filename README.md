@@ -38,7 +38,11 @@ hotkey, a settings window, nineteen themes and twenty-six languages.
 Go 1.27 or later:
 
 ```sh
-go build -o launch.exe .
+# -H=windowsgui keeps Windows from putting a console window beside the
+# launcher, which is what the reference, a WPF application, also has none
+# of. A query on the command line still prints when its output is piped or
+# sent to a file.
+go build -ldflags="-H=windowsgui" -o launch.exe .
 ./launch.exe
 ```
 
