@@ -10,6 +10,7 @@ import (
 	// The plugins the launcher ships with.
 	"launch/plugins/browserbookmark"
 	"launch/plugins/calculator"
+	"launch/plugins/copyq"
 	"launch/plugins/explorer"
 	"launch/plugins/pluginindicator"
 	"launch/plugins/pluginsmanager"
@@ -26,6 +27,7 @@ import (
 // the settings window lists them.
 var bundledPlugins = []func() core.Plugin{
 	func() core.Plugin { return calculator.New() },
+	func() core.Plugin { return copyq.New() },
 	func() core.Plugin { return program.New() },
 	func() core.Plugin { return explorer.New() },
 	func() core.Plugin { return browserbookmark.New() },

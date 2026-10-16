@@ -67,6 +67,12 @@ type Hooks struct {
 	OpenAppURI           func(appURI string)
 	ShellRun             func(cmd, filename string)
 	CopyToClipboard      func(text string, directCopy, showDefaultNotification bool)
+	// ReadClipboard reads what the machine's clipboard holds, which a
+	// clipboard manager keeps a history of.
+	ReadClipboard func() (ClipboardContent, error)
+	// PasteIntoWindow puts what is on the clipboard into the window the
+	// user came from, as Ctrl+V does.
+	PasteIntoWindow func()
 }
 
 // MessageBoxButtons and MessageBoxIcon are what a message box offers.
@@ -464,6 +470,47 @@ func (a *PublicAPI) OpenAppUri(appURI string) {
 func (a *PublicAPI) ShellRun(cmd, filename string) {
 	if a.Hooks.ShellRun != nil {
 		a.Hooks.ShellRun(cmd, filename)
+	}
+}
+
+// ClipboardContent is what the machine's clipboard holds: one of text,
+// files or an image, whichever it is.
+type ClipboardContent struct {
+	// Kind is what the clipboard holds.
+	Kind ClipboardKind
+	// Text is the text, for text.
+	Text string
+	// Files are the paths, for files.
+	Files []string
+	// Image is the picture as PNG bytes, for an image.
+	Image []byte
+}
+
+// ClipboardKind is what a clipboard holds.
+type ClipboardKind int
+
+const (
+	// ClipboardText is text.
+	ClipboardText ClipboardKind = iota
+	// ClipboardFiles are files, copied in a file manager.
+	ClipboardFiles
+	// ClipboardImage is a picture.
+	ClipboardImage
+)
+
+// ReadClipboard reads what the machine's clipboard holds.
+func (a *PublicAPI) ReadClipboard() (ClipboardContent, error) {
+	if a.Hooks.ReadClipboard == nil {
+		return ClipboardContent{}, nil
+	}
+	return a.Hooks.ReadClipboard()
+}
+
+// PasteIntoWindow puts what is on the clipboard into the window the user
+// came from, which is what choosing a clipboard item does.
+func (a *PublicAPI) PasteIntoWindow() {
+	if a.Hooks.PasteIntoWindow != nil {
+		a.Hooks.PasteIntoWindow()
 	}
 }
 

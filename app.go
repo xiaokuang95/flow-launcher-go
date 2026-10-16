@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"launch/core"
@@ -171,6 +173,53 @@ func matcherFor(settings *core.Settings) core.StringMatcher {
 	return matcher
 }
 
+// readClipboard reads what the machine's clipboard holds, which is one of
+// text, files or a picture. The launcher's own clipboard module is asked,
+// since it is the only part that may touch the clipboard, and it answers on
+// the thread the window lives on: a launcher without a window — a probe, a
+// test, a run that only asks a query — would wait for it forever, so the
+// read is left to a window that is there.
+func readClipboard() (core.ClipboardContent, error) {
+	if !clipboardWindowIsUp() {
+		return core.ClipboardContent{}, nil
+	}
+	if files, err := mygo.Clipboard.ReadFiles(); err == nil && len(files) > 0 {
+		return core.ClipboardContent{Kind: core.ClipboardFiles, Files: files}, nil
+	}
+	if text := mygo.Clipboard.ReadText(); text != "" {
+		return core.ClipboardContent{Kind: core.ClipboardText, Text: text}, nil
+	}
+	if image, err := mygo.Clipboard.ReadFormat(transfer.PNG); err == nil && len(image) > 0 {
+		return core.ClipboardContent{Kind: core.ClipboardImage, Image: image}, nil
+	}
+	return core.ClipboardContent{}, nil
+}
+
+// pasteIntoWindow puts what is on the clipboard into the window the user
+// came from, which is what choosing a clipboard item does: the launcher
+// takes itself out of the way first, and then the paste key is pressed for
+// the window underneath.
+func (a *app) pasteIntoWindow() {
+	a.hide()
+	go func() {
+		// The window underneath has to be the one in front before the key
+		// reaches it, which takes the desktop a moment.
+		time.Sleep(120 * time.Millisecond)
+		if err := pasteKeys(); err != nil {
+			a.api.LogError("launcher", "pasting failed: "+err.Error())
+		}
+	}()
+}
+
+// clipboardWindowIsUp is true once the launcher's window is there, which is
+// what reading the clipboard needs: mygo answers on the thread the window
+// lives on, and a launcher without one would wait for it forever.
+var clipboardWindowIsUp = func() bool { return windowUp.Load() }
+
+// windowUp is set when the window has been made, and cleared when the
+// launcher quits.
+var windowUp atomic.Bool
+
 // showShellContextMenu shows the machine's own context menu for a path, at
 // the place the mouse is, from the launcher's own window: the menu belongs
 // to a window, and the shell's objects belong to the thread that made them.
@@ -209,6 +258,8 @@ func (a *app) hooks() core.Hooks {
 		SavePluginSettings:  func() { a.plugins.Save() },
 		ReloadAllPluginData: a.reloadPluginData,
 		CopyToClipboard:     func(text string, directCopy, notify bool) { a.copyToClipboard(text, directCopy, notify) },
+		ReadClipboard:       readClipboard,
+		PasteIntoWindow:     a.pasteIntoWindow,
 		ShowMsg:             func(title, subTitle, icon string) { a.notify(title, subTitle) },
 		ShowMsgError:        func(title, subTitle string) { a.notify(title, subTitle) },
 		OpenDirectory:       openDirectory,

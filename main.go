@@ -137,6 +137,9 @@ func (a *app) start() error {
 
 // createWindow makes the launcher's window, which starts hidden.
 func (a *app) createWindow() {
+	// From here on the clipboard can be read, which is answered on the
+	// thread the window lives on.
+	windowUp.Store(true)
 	a.win = mygo.NewWindow(mygo.WindowOptions{
 		Title:             "Flow Launcher",
 		Width:             int(a.settings.WindowSize),
