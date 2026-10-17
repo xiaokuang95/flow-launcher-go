@@ -1,7 +1,10 @@
 package copyq
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -471,6 +474,42 @@ func TestAQueryWithAnEmptyHistoryAnswersWithNothing(t *testing.T) {
 	if results := plugin.results(t, "anything"); len(results) != 0 {
 		t.Errorf("the search found %v, want nothing", titlesOf(results))
 	}
+}
+
+func TestAPictureSaysHowBigItIs(t *testing.T) {
+	clipboard := &fakeClipboard{}
+	plugin, _ := newTestPlugin(t, clipboard)
+
+	// A 3×2 picture, which is what a result is named after.
+	picture := pngOfSize(t, 3, 2)
+	clipboard.content = core.ClipboardContent{Kind: core.ClipboardImage, Image: picture}
+	plugin.capture()
+
+	items := plugin.items()
+	if len(items) != 1 {
+		t.Fatalf("the history holds %d items", len(items))
+	}
+	if got := items[0].Title(); got != "Image 3×2" {
+		t.Errorf("the picture is called %q, want its size", got)
+	}
+
+	// And it is what a result offers to show.
+	result := plugin.results(t, "")[0]
+	if result.Preview.PreviewImagePath != items[0].Image {
+		t.Errorf("the result shows %q, want the picture itself", result.Preview.PreviewImagePath)
+	}
+}
+
+// pngOfSize is a picture of the size given.
+func pngOfSize(t *testing.T, width, height int) []byte {
+	t.Helper()
+
+	var buffer bytes.Buffer
+	picture := image.NewRGBA(image.Rect(0, 0, width, height))
+	if err := png.Encode(&buffer, picture); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
 }
 
 func TestAPictureIsKeptAsAFile(t *testing.T) {

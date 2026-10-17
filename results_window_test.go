@@ -1,6 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -104,6 +110,66 @@ func TestTheKeysWalkAPluginsWindow(t *testing.T) {
 	if window.selection != 0 {
 		t.Errorf("Up from the first result left the choice on %d", window.selection)
 	}
+}
+
+// TestAPictureIsShownInAPluginsWindow is what a clipboard history needs: a
+// picture the clipboard held is drawn, not only named.
+func TestAPictureIsShownInAPluginsWindow(t *testing.T) {
+	a := listApp(t)
+	a.settings = core.DefaultSettings()
+
+	// A picture of the test's own, in the plugin's cache.
+	directory := t.TempDir()
+	picture := filepath.Join(directory, "picture.png")
+	if err := os.WriteFile(picture, smallPNG(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := core.NewResult("Image 2×2", "just now", picture, 100)
+	result.Preview.FilePath = picture
+	result.Preview.PreviewImagePath = picture
+
+	window := &resultsWindow{app: a, window: core.ResultsWindow{
+		PluginID: "probe", Title: "Clipboard history", Placeholder: "Search",
+		Search: func(string) []core.Result { return []core.Result{result} },
+	}}
+	window.search("")
+
+	if !window.showsPreview() {
+		t.Fatalf("the window has no preview for a picture")
+	}
+
+	tester := ui.NewTester(window.view, 460, 420)
+	image := tester.Image()
+
+	// The window is not one flat colour: the picture is drawn beside the
+	// list.
+	first := image.RGBAAt(0, 0)
+	differing := 0
+	for y := 0; y < image.Bounds().Dy(); y++ {
+		for x := 0; x < image.Bounds().Dx(); x++ {
+			if image.RGBAAt(x, y) != first {
+				differing++
+			}
+		}
+	}
+	if differing == 0 {
+		t.Errorf("the window is one flat colour, so the picture was not drawn")
+	}
+}
+
+// smallPNG is a 2×2 picture, which is the least a picture can be.
+func smallPNG(t *testing.T) []byte {
+	t.Helper()
+
+	var buffer bytes.Buffer
+	picture := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	picture.Set(0, 0, color.RGBA{R: 255, A: 255})
+	picture.Set(1, 1, color.RGBA{G: 255, A: 255})
+	if err := png.Encode(&buffer, picture); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
 }
 
 // TestTypingNarrowsAPluginsWindow is the other half of what the user does.

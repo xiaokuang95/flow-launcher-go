@@ -1,6 +1,9 @@
 package copyq
 
 import (
+	"encoding/binary"
+	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -58,11 +61,46 @@ func (i Item) Title() string {
 		}
 		return baseName(i.Files[0]) + " + " + itoa(len(i.Files)-1)
 	case KindImage:
+		if size := i.imageSize(); size != "" {
+			return "Image " + size
+		}
 		return "Image"
 	default:
 		return oneLine(i.Text)
 	}
 }
+
+// imageSize is how big a picture is, as "160×100", which is what tells two
+// pictures apart. Empty when the picture cannot be read.
+func (i Item) imageSize() string {
+	if i.Image == "" {
+		return ""
+	}
+	file, err := os.Open(i.Image)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+
+	// A PNG says how big it is in its own header: a signature, then the
+	// length and the name of the first chunk, then the size.
+	header := make([]byte, 24)
+	if _, err := io.ReadFull(file, header); err != nil {
+		return ""
+	}
+	if string(header[:8]) != pngSignature {
+		return ""
+	}
+	width := int(binary.BigEndian.Uint32(header[16:20]))
+	height := int(binary.BigEndian.Uint32(header[20:24]))
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	return itoa(width) + "×" + itoa(height)
+}
+
+// pngSignature starts every PNG file.
+const pngSignature = "\x89PNG\r\n\x1a\n"
 
 // Subtitle is what is written under it: where a file is, how long a text
 // is, when it was copied.

@@ -149,35 +149,88 @@ func (w *resultsWindow) view(c *ui.Context) {
 			return
 		}
 
-		ui.List(c, &w.list, len(w.results)).Grow(1).Rows(func(row ui.ListRow) {
-			if row.Index < 0 || row.Index >= len(w.results) {
-				return
-			}
-			result := w.results[row.Index]
+		// What the chosen result holds is shown beside the list, when the
+		// plugin gave something to look at.
+		if w.showsPreview() {
+			width := float32(resultsWindowWidth) - previewPaneWidth
+			ui.Split(c, &width, func() { w.resultsView(c) }, func() { w.previewView(c) }).Grow(1)
+			return
+		}
+		w.resultsView(c)
+	})
+}
 
-			element := ui.Row(row.Context).Height(resultHeight).Padding(0, 12).Gap(12).AlignItems(ui.Center)
-			if row.Index == w.selection {
-				element.Background(t.Selection)
-			}
-			element.Children(func() {
-				w.app.resultIcon(row.Context, result)
-				ui.Column(row.Context).Grow(1).Gap(2).Children(func() {
-					ui.Text(row.Context, result.Title).
-						FontSize(float32(w.app.resultFontSize())).
-						SingleLine()
-					if result.SubTitle != "" {
-						ui.Text(row.Context, result.SubTitle).
-							FontSize(float32(w.app.resultSubFontSize())).
-							SingleLine().
-							TextColor(t.TextMuted)
-					}
-				})
-			})
-			element.OnClick(func() {
-				w.selection = row.Index
-				w.choose(row.Index)
+// resultsView is the list of the plugin's results.
+func (w *resultsWindow) resultsView(c *ui.Context) {
+	t := c.Theme()
+
+	ui.List(c, &w.list, len(w.results)).Grow(1).Rows(func(row ui.ListRow) {
+		if row.Index < 0 || row.Index >= len(w.results) {
+			return
+		}
+		result := w.results[row.Index]
+
+		element := ui.Row(row.Context).Height(resultHeight).Padding(0, 12).Gap(12).AlignItems(ui.Center)
+		if row.Index == w.selection {
+			element.Background(t.Selection)
+		}
+		element.Children(func() {
+			w.app.resultIcon(row.Context, result)
+			ui.Column(row.Context).Grow(1).Gap(2).Children(func() {
+				ui.Text(row.Context, result.Title).
+					FontSize(float32(w.app.resultFontSize())).
+					SingleLine()
+				if result.SubTitle != "" {
+					ui.Text(row.Context, result.SubTitle).
+						FontSize(float32(w.app.resultSubFontSize())).
+						SingleLine().
+						TextColor(t.TextMuted)
+				}
 			})
 		})
+		element.OnClick(func() {
+			w.selection = row.Index
+			w.choose(row.Index)
+		})
+	})
+}
+
+// previewPaneWidth is how much of the window a picture takes.
+const previewPaneWidth float32 = 160
+
+// showsPreview reports whether the result the user is on has something to
+// look at.
+func (w *resultsWindow) showsPreview() bool {
+	if w.selection < 0 || w.selection >= len(w.results) {
+		return false
+	}
+	preview := w.results[w.selection].Preview
+	return preview.PreviewImagePath != "" || preview.FilePath != ""
+}
+
+// previewView shows what the result the user is on holds, when the plugin
+// gave something to look at: a picture copied to the clipboard is shown as
+// itself rather than as the word "Image".
+func (w *resultsWindow) previewView(c *ui.Context) {
+	if w.selection < 0 || w.selection >= len(w.results) {
+		return
+	}
+	preview := w.results[w.selection].Preview
+	if preview.PreviewImagePath == "" && preview.FilePath == "" {
+		return
+	}
+
+	path := preview.PreviewImagePath
+	if path == "" {
+		path = preview.FilePath
+	}
+	bitmap := w.app.bitmapFor(path)
+	if bitmap == nil {
+		return
+	}
+
+	ui.Column(c).Width(previewPaneWidth).Padding(12).Gap(8).Background(c.Theme().Surface).Children(func() {
+		ui.Image(c, bitmap).FillWidth().Fit(ui.Contain)
 	})
 }
 

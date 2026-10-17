@@ -75,7 +75,7 @@ func (s *Settings) applyDefaults() {
 	// The switches cannot tell "off" from "not written", so a file that
 	// was written before there were any is the one that does not say. It
 	// is written from now on, which is what Version is for.
-	if s.Version == 0 {
+	if s.Version < 2 {
 		s.WatchText = defaults.WatchText
 		s.WatchFiles = defaults.WatchFiles
 		s.WatchImages = defaults.WatchImages
@@ -86,7 +86,7 @@ func (s *Settings) applyDefaults() {
 
 // settingsVersion is what the settings a file holds are as they are now,
 // which says whether a file written by an older build needs filling in.
-const settingsVersion = 1
+const settingsVersion = 2
 
 // DefaultSettings are the settings a user who changed nothing gets.
 func DefaultSettings() Settings {
@@ -96,7 +96,7 @@ func DefaultSettings() Settings {
 		MaxItems:           defaultLimit,
 		WatchText:          true,
 		WatchFiles:         true,
-		WatchImages:        false,
+		WatchImages:        true,
 		PasteAfterChoosing: true,
 		IgnoreShortText:    0,
 		IgnoreShortcut:     "{clipboard}",
