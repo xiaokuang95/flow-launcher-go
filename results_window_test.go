@@ -172,6 +172,55 @@ func smallPNG(t *testing.T) []byte {
 	return buffer.Bytes()
 }
 
+// TestDeleteTakesAResultAway is what a clipboard history needs: what was
+// copied by mistake is deleted from the list the window shows.
+func TestDeleteTakesAResultAway(t *testing.T) {
+	a := listApp(t)
+	a.settings = core.DefaultSettings()
+
+	items := []core.Result{
+		core.NewResult("alpha", "", "", 100),
+		core.NewResult("beta", "", "", 100),
+	}
+	deleted := &[]string{}
+	window := &resultsWindow{app: a, window: core.ResultsWindow{
+		PluginID: "probe",
+		Search:   func(string) []core.Result { return items },
+		Delete: func(result core.Result) bool {
+			*deleted = append(*deleted, result.Title)
+			kept := make([]core.Result, 0, len(items))
+			for _, item := range items {
+				if item.Title != result.Title {
+					kept = append(kept, item)
+				}
+			}
+			items = kept
+			return true
+		},
+	}}
+	window.search("")
+
+	tester := ui.NewTester(window.view, 460, 420)
+	tester.SetFocused(true)
+	window.focusQuery()
+	tester.Frame()
+
+	tester.Key(0, ui.KeyDelete)
+
+	if len(*deleted) != 1 || (*deleted)[0] != "alpha" {
+		t.Fatalf("Delete asked for %v, want the result the user was on", *deleted)
+	}
+	if len(window.results) != 1 || window.results[0].Title != "beta" {
+		t.Errorf("the window shows %v, want what is left", windowTitles(window.results))
+	}
+
+	// Ctrl+Delete empties the list.
+	tester.Key(ui.Cmd, ui.KeyDelete)
+	if len(window.results) != 0 {
+		t.Errorf("Ctrl+Delete left %v, want the list emptied", windowTitles(window.results))
+	}
+}
+
 // TestTypingNarrowsAPluginsWindow is the other half of what the user does.
 func TestTypingNarrowsAPluginsWindow(t *testing.T) {
 	a := listApp(t)

@@ -308,6 +308,7 @@ func (p *Plugin) showWindow() {
 			p.chooseResult(result)
 			return false
 		},
+		Delete: p.deleteResult,
 	})
 }
 
@@ -323,6 +324,22 @@ func (p *Plugin) resultsFor(search string) []core.Result {
 		return nil
 	}
 	return results
+}
+
+// deleteResult takes the item a result stands for out of the history, which
+// is what Delete does in the plugin's window: what was copied by mistake is
+// in the way of what was meant.
+func (p *Plugin) deleteResult(result core.Result) bool {
+	item, ok := result.ContextData.(Item)
+	if !ok {
+		return false
+	}
+	index := p.indexOf(item)
+	if index < 0 {
+		return false
+	}
+	p.remove(index)
+	return true
 }
 
 // chooseResult puts the item a result stands for back on the clipboard, and

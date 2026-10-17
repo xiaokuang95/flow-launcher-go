@@ -250,6 +250,13 @@ func (w *resultsWindow) keyInput(event ui.InputEvent) bool {
 		w.moveSelection(5)
 	case event.Mods == 0 && event.Key == ui.KeyPageUp:
 		w.moveSelection(-5)
+	case event.Mods == 0 && event.Key == ui.KeyDelete && w.window.Delete != nil:
+		// Delete takes the result away, which a clipboard history needs:
+		// what was copied by mistake is in the way of what was meant.
+		w.deleteSelection()
+	case event.Mods == ui.Cmd && event.Key == ui.KeyDelete && w.window.Delete != nil:
+		// Ctrl+Delete empties the list, which the plugin decides on.
+		w.deleteAll()
 	case event.Mods == 0 && event.Key == ui.KeyEscape:
 		w.close()
 	case event.Mods == ui.Cmd && event.Key == ui.KeyW:
@@ -260,6 +267,41 @@ func (w *resultsWindow) keyInput(event ui.InputEvent) bool {
 		return false
 	}
 	return true
+}
+
+// deleteSelection takes the result the user is on away, and shows what is
+// left.
+func (w *resultsWindow) deleteSelection() {
+	if w.selection < 0 || w.selection >= len(w.results) {
+		return
+	}
+	if w.window.Delete == nil || !w.window.Delete(w.results[w.selection]) {
+		return
+	}
+
+	// The list is asked again, and the choice stays where it was, which is
+	// the next result.
+	was := w.selection
+	w.search(w.query)
+	w.selection = was
+	if w.selection >= len(w.results) && w.selection > 0 {
+		w.selection = len(w.results) - 1
+	}
+	w.list.ScrollIntoView(w.selection)
+}
+
+// deleteAll takes every result away, which the plugin decides what that
+// means.
+func (w *resultsWindow) deleteAll() {
+	if w.window.Delete == nil {
+		return
+	}
+	for _, result := range w.results {
+		if !w.window.Delete(result) {
+			return
+		}
+	}
+	w.search(w.query)
 }
 
 // moveSelection walks the results, keeping to the ends.

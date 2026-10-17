@@ -424,6 +424,10 @@ type ResultsWindow struct {
 	// Choose runs the result the user chose, and reports whether the window
 	// stays open. The window closes by itself otherwise.
 	Choose func(result Result) bool
+	// Delete takes a result away, which is what Delete does on it. The
+	// window asks for what to show again afterwards. nil leaves Delete to
+	// the query box, where it deletes a character.
+	Delete func(result Result) bool
 }
 
 // RegisterHotkey binds a key that runs an action, which is how a plugin
