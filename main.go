@@ -181,6 +181,9 @@ func (a *app) show() {
 	if a.win == nil || a.gameMode() {
 		return
 	}
+	// What the user is working in, before the launcher takes the front:
+	// choosing a clipboard item pastes into it.
+	a.rememberForeground()
 	a.positionWindow()
 	a.win.Show()
 	a.win.Focus()

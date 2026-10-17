@@ -95,6 +95,13 @@ type app struct {
 	// systemIsDark is the desktop's own appearance, read while a frame was
 	// drawn on the thread that can answer.
 	systemIsDark bool
+
+	// cameFrom is the window the user was working in before the launcher
+	// came up, which is where a clipboard item is pasted.
+	cameFrom uintptr
+	// windowOf is the launcher's own window, kept here so that a test can
+	// give it one without a window being made.
+	windowOf func() uintptr
 }
 
 // newApp makes the launcher and loads everything it needs: the settings,
@@ -224,16 +231,71 @@ func readClipboard() (core.ClipboardContent, error) {
 // takes itself out of the way first, and then the paste key is pressed for
 // the window underneath.
 func (a *app) pasteIntoWindow() {
+	target := a.cameFrom
 	a.hide()
+
+	// Nothing of the user's to paste into: the clipboard keeps what was
+	// chosen, and no key is pressed, which is what keeps the launcher from
+	// typing into its own query box.
+	if target == 0 {
+		return
+	}
+
 	go func() {
-		// The window underneath has to be the one in front before the key
-		// reaches it, which takes the desktop a moment.
-		time.Sleep(120 * time.Millisecond)
-		if err := pasteKeys(); err != nil {
+		// The window the user came from has to be in front before the key
+		// is pressed. Hiding the launcher does not give it back — the
+		// desktop leaves the focus where it was — so a paste sent now
+		// would land in the launcher's own query box, which is what made
+		// the search box look like the clipboard.
+		if err := activateWindowOf(target); err != nil {
+			a.api.LogError("launcher", "pasting: "+err.Error())
+			return
+		}
+		time.Sleep(80 * time.Millisecond)
+
+		// And it must not be the launcher that takes it, whatever the
+		// desktop did with the focus.
+		if front := foregroundWindowOf(); front == 0 || front == a.windowHandle() {
+			return
+		}
+		if err := pasteKeysOf(); err != nil {
 			a.api.LogError("launcher", "pasting failed: "+err.Error())
 		}
 	}()
 }
+
+// windowHandle is the launcher's own window, or 0 when it has none.
+func (a *app) windowHandle() uintptr {
+	if a.windowOf != nil {
+		return a.windowOf()
+	}
+	if a.win == nil {
+		return 0
+	}
+	return a.win.NativeHandle()
+}
+
+// rememberForeground notes the window the user is working in, so that
+// choosing a clipboard item pastes into it rather than into whatever the
+// desktop leaves in front.
+func (a *app) rememberForeground() {
+	front := foregroundWindowOf()
+	if front == 0 || front == a.windowHandle() {
+		return
+	}
+	a.cameFrom = front
+}
+
+// The three things a paste does to the machine, kept behind fields so that
+// a test watches what was asked for rather than typing into a window.
+var (
+	// foregroundWindowOf is the window the user is working in.
+	foregroundWindowOf = foregroundWindow
+	// activateWindowOf brings a window in front.
+	activateWindowOf = activateWindow
+	// pasteKeysOf presses the paste key.
+	pasteKeysOf = pasteKeys
+)
 
 // clipboardWindowIsUp is true once the launcher's window is there, which is
 // what reading the clipboard needs: mygo answers on the thread the window

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"syscall"
 	"unsafe"
 )
@@ -29,6 +30,47 @@ func pasteKeys() error {
 	return nil
 }
 
+// foregroundWindow is the window the user is working in, which is what a
+// paste goes to.
+func foregroundWindow() uintptr {
+	window, _, _ := procGetForegroundWindow.Call()
+	return window
+}
+
+// activateWindow puts a window in front of the others, so that what is
+// typed next reaches it. A window may refuse the focus, and a window that
+// belongs to another program refuses it more often when the program that
+// asks is not the one in front: the keyboard is handed over for the moment
+// it takes.
+func activateWindow(window uintptr) error {
+	if window == 0 {
+		return errors.New("there is no window to paste into")
+	}
+
+	if result, _, _ := procSetForegroundWindow.Call(window); result != 0 {
+		return nil
+	}
+
+	// The focus follows the input: while this program holds it, the window
+	// it means to hand it to is put in front, and then the focus is given
+	// back.
+	foreground, _, _ := procGetForegroundWindow.Call()
+	if foreground == 0 {
+		return errors.New("the window to paste into would not come forward")
+	}
+	thisThread, _, _ := procGetCurrentThreadId.Call()
+	otherThread, _, _ := procGetWindowThreadProcessId.Call(foreground, 0)
+
+	procAttachThreadInput.Call(thisThread, otherThread, 1)
+	result, _, _ := procSetForegroundWindow.Call(window)
+	procAttachThreadInput.Call(thisThread, otherThread, 0)
+
+	if result == 0 {
+		return errors.New("the window to paste into would not come forward")
+	}
+	return nil
+}
+
 // keyboardInput is one key press or release, as SendInput reads it: the
 // kind, the key, the flags, and the padding the system expects.
 type keyboardInput struct {
@@ -50,4 +92,17 @@ const (
 	vkControl = 0x11
 )
 
-var procSendInput = syscall.NewLazyDLL("user32.dll").NewProc("SendInput")
+// user32 and kernel32 are the system's own libraries.
+var (
+	user32   = syscall.NewLazyDLL("user32.dll")
+	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+)
+
+var (
+	procSendInput                = user32.NewProc("SendInput")
+	procGetForegroundWindow      = user32.NewProc("GetForegroundWindow")
+	procSetForegroundWindow      = user32.NewProc("SetForegroundWindow")
+	procGetCurrentThreadId       = kernel32.NewProc("GetCurrentThreadId")
+	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
+	procAttachThreadInput        = user32.NewProc("AttachThreadInput")
+)

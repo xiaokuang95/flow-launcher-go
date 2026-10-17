@@ -194,7 +194,9 @@ func New() *Plugin {
 // machine's own clipboard is not read or written; the launcher leaves it
 // alone, and the plugin uses the machine's.
 func (p *Plugin) WatchClipboard(clipboard Clipboard) {
+	p.mu.Lock()
 	p.clipboard = clipboard
+	p.mu.Unlock()
 	p.Capture()
 }
 
@@ -210,14 +212,6 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 	p.words = core.NewPluginTranslator(languages, "Languages")
 	loaded := core.LoadSettingJsonStorage[Settings](ctx.API, "CopyQ", "Settings.json")
 	p.settings = loaded
-	// A settings file written by an older build says nothing about what it
-	// did not have, so what it leaves empty is filled in, and written back
-	// so that the file says what the launcher is doing.
-	before := p.settings
-	p.settings.applyDefaults()
-	if before != p.settings {
-		p.Save()
-	}
 	if p.clipboard == nil {
 		p.clipboard = systemClipboard{api: ctx.API}
 	}
@@ -227,6 +221,15 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 	if kept, ok := core.LoadCacheBinaryStorage[[]Item](ctx.API, "CopyQ", "history"); ok {
 		p.history.SetItems(kept)
 		p.history.SortByTime()
+	}
+
+	// A settings file written by an older build says nothing about what it
+	// did not have, so what it leaves empty is filled in, and written back
+	// so that the file says what the launcher is doing.
+	before := p.settings
+	p.settings.applyDefaults()
+	if before != p.settings {
+		p.Save()
 	}
 
 	// The metadata the launcher matches the query against comes from the
@@ -306,10 +309,13 @@ func (p *Plugin) Stop() {
 // capture takes what the clipboard holds into the history, when it is
 // something the user asked to keep and is not what was kept last.
 func (p *Plugin) capture() {
-	if p.clipboard == nil {
+	p.mu.Lock()
+	clipboard := p.clipboard
+	p.mu.Unlock()
+	if clipboard == nil {
 		return
 	}
-	content, err := p.clipboard.Read()
+	content, err := clipboard.Read()
 	if err != nil {
 		p.api.LogError("CopyQ", "reading the clipboard failed: "+err.Error())
 		return
@@ -535,7 +541,13 @@ func (p *Plugin) choose(index int, paste bool) {
 	}
 
 	item := items[index]
-	if err := p.clipboard.Write(item); err != nil {
+	p.mu.Lock()
+	clipboard := p.clipboard
+	p.mu.Unlock()
+	if clipboard == nil {
+		return
+	}
+	if err := clipboard.Write(item); err != nil {
 		p.api.LogError("CopyQ", "putting an item back on the clipboard failed: "+err.Error())
 		return
 	}
