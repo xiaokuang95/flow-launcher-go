@@ -122,8 +122,8 @@ type Plugin struct {
 	watching bool
 	stop     chan struct{}
 
-	// pasted is what the plugin asked the launcher to do last, which a test
-	// reads.
+	// now is the clock, which a test sets so that what an item says about
+	// when it was copied can be checked.
 	now func() time.Time
 }
 
@@ -140,6 +140,9 @@ func New() *Plugin {
 			ActionKeywords: []string{"cb"},
 			IcoPath:        "Images/copyq.png",
 		}},
+		// The settings a user who changed nothing gets, so that a plugin
+		// built without Init still knows what to keep.
+		settings:  DefaultSettings(),
 		clipboard: nil,
 		now:       time.Now,
 	}
@@ -374,7 +377,11 @@ func (p *Plugin) Query(ctx context.Context, query core.Query) ([]core.Result, er
 		return nil, nil
 	}
 
+	// The precision is the lowest one, as a search of what the clipboard
+	// held needs: a word in the middle of a long text is what the user is
+	// looking for, and the matcher's own precision would leave it out.
 	matcher := p.api.Matcher()
+	matcher.UserSettingSearchPrecision = core.SearchPrecisionLow
 	search := strings.TrimSpace(query.Search)
 
 	var results []core.Result

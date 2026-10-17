@@ -370,6 +370,42 @@ func TestClearingLeavesWhatTheUserPinned(t *testing.T) {
 	}
 }
 
+func TestChoosingAnItemWritesItThroughTheLaunchersOwnCopy(t *testing.T) {
+	clipboard := &fakeClipboard{}
+	plugin, _ := newTestPlugin(t, clipboard)
+
+	// The launcher's own copy is what puts an item back: the test watches
+	// what the plugin asked it for, which is what a window does.
+	copied := make([]string, 0, 2)
+	plugin.api.Hooks.CopyToClipboard = func(text string, directCopy, notify bool) {
+		copied = append(copied, text)
+	}
+	plugin.clipboard = writingClipboard{api: plugin.api, content: core.ClipboardContent{
+		Kind: core.ClipboardText, Text: "the item to put back",
+	}}
+	plugin.Capture()
+
+	plugin.results(t, "")[0].Action(core.ActionContext{})
+
+	if len(copied) != 1 || copied[0] != "the item to put back" {
+		t.Errorf("the launcher was asked to copy %v, want the chosen item", copied)
+	}
+}
+
+// writingClipboard reads a fixed thing and writes through the launcher's
+// own copy, as the machine's clipboard does.
+type writingClipboard struct {
+	api     *core.PublicAPI
+	content core.ClipboardContent
+}
+
+func (c writingClipboard) Read() (core.ClipboardContent, error) { return c.content, nil }
+
+func (c writingClipboard) Write(item Item) error {
+	c.api.CopyToClipboard(item.Text, false, false)
+	return nil
+}
+
 func TestTheHistoryIsKeptBetweenRuns(t *testing.T) {
 	clipboard := &fakeClipboard{}
 	plugin, _ := newTestPlugin(t, clipboard)
