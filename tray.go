@@ -23,6 +23,17 @@ func searchIcon() *ui.SVG {
 	return ui.MustParseSVG([]byte(trayIconSVG))
 }
 
+// chevronSVG is the mark a list of choices carries, which says that it opens
+// rather than that it is a box of text.
+const chevronSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <path d="M4 6.5 L8 10.5 L12 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`
+
+// chevronIcon is the mark of a drop-down.
+func chevronIcon() *ui.SVG {
+	return ui.MustParseSVG([]byte(chevronSVG))
+}
+
 // createTray puts the launcher's icon in the notification area, with a menu
 // that opens it and quits it.
 func (a *app) createTray() {

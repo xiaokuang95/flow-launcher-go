@@ -37,7 +37,7 @@ func (a *app) previewOn() bool {
 func (a *app) queryBox(c *ui.Context) {
 	t := c.Theme()
 
-	row := ui.Row(c).Height(float32(a.settings.WindowHeightSize)).Padding(0, 12).Gap(10).AlignItems(ui.Center)
+	row := ui.Row(c).Height(float32(a.settings.WindowHeightSize)).Padding(4, 6).Gap(10).AlignItems(ui.Center)
 	row.Children(func() {
 		if a.pluginIcon != "" {
 			if bitmap := a.bitmapFor(a.pluginIcon); bitmap != nil {
@@ -302,8 +302,6 @@ func (a *app) pageSize() int { return a.settings.MaxResultsToShow }
 // contextMenuView is the menu of the result the user asked for, shown in
 // place of the results.
 func (a *app) contextMenuView(c *ui.Context) {
-	t := c.Theme()
-
 	// The menu keeps its own list, so that moving through it does not move
 	// the choice among the results.
 	a.menuList.Selected = &a.contextIndex
@@ -318,12 +316,9 @@ func (a *app) contextMenuView(c *ui.Context) {
 	height := float32(a.settings.MaxResultsToShow) * resultHeight
 	ui.List(c, &a.menuList, len(a.contextMenu)).MaxHeight(height).Grow(1).Rows(func(row ui.ListRow) {
 		item := a.contextMenu[row.Index]
-		selected := row.Selected() && row.ListFocused()
+		selected := row.Selected()
 
-		element := ui.Row(row.Context).Height(resultHeight).Padding(0, 12).Gap(12).AlignItems(ui.Center)
-		if selected {
-			element.Background(t.Selection)
-		}
+		element := resultRow(row.Context, selected)
 		element.Children(func() {
 			a.resultIcon(row.Context, item)
 			ui.Text(row.Context, item.Title).FontSize(float32(a.resultFontSize())).SingleLine().Grow(1)
@@ -359,7 +354,10 @@ func (a *app) resultsView(c *ui.Context) {
 	}
 
 	height := float32(a.settings.MaxResultsToShow) * resultHeight
-	list := ui.List(c, &a.list, len(a.results)).MaxHeight(height).Grow(1)
+	// The rows are inset from the window's edge, which is what makes the
+	// chosen one read as a pill inside the window rather than as a band
+	// across it.
+	list := ui.List(c, &a.list, len(a.results)).MaxHeight(height).Grow(1).Padding(4, 8)
 
 	if len(a.results) == 0 {
 		list.Children(func() {
@@ -380,16 +378,13 @@ func (a *app) resultRow(row ui.ListRow) {
 	t := c.Theme()
 	result := a.results[row.Index]
 
-	selected := row.Selected() && row.ListFocused()
-	element := ui.Row(c).Height(resultHeight).Padding(0, 12).Gap(12).AlignItems(ui.Center)
-	if selected {
-		element.Background(t.Selection)
-	}
+	selected := row.Selected()
+	element := resultRow(c, selected)
 
 	element.Children(func() {
 		a.resultIcon(c, result)
 
-		ui.Column(c).Grow(1).Gap(2).Children(func() {
+		ui.Column(c).Grow(1).Gap(1).Children(func() {
 			a.resultTitle(c, result)
 			if result.SubTitle != "" {
 				subtitle := ui.Text(c, result.SubTitle).
@@ -442,7 +437,7 @@ func (a *app) badgeShows(result core.Result) bool {
 func (a *app) resultIcon(c *ui.Context, result core.Result) {
 	if result.Icon != nil {
 		if bitmap := a.imageBitmap(result.Icon()); bitmap != nil {
-			ui.Image(c, bitmap).Size(24, 24)
+			iconFrame(c, bitmap)
 			return
 		}
 	}
@@ -450,23 +445,30 @@ func (a *app) resultIcon(c *ui.Context, result core.Result) {
 	// A plugin may give its icon as a character of a font, and the user
 	// decides which of the two is drawn when it gives both.
 	if result.Glyph != nil && (a.settings.UseGlyphIcons || result.IcoPath == "") {
-		ui.Text(c, result.Glyph.Glyph).Font(result.Glyph.FontFamily).FontSize(20).Width(24).TextAlign(ui.Center)
+		ui.Text(c, result.Glyph.Glyph).
+			Font(result.Glyph.FontFamily).
+			FontSize(20).
+			Width(lookIconSize).
+			TextAlign(ui.Center)
 		return
 	}
 	if bitmap := a.bitmapFor(result.IcoPathAbsolute()); bitmap != nil {
-		image := ui.Image(c, bitmap).Size(24, 24)
-		if result.RoundedIcon {
-			image.Radius(4)
-		}
+		// Every picture is rounded, not only the ones a plugin marks: a
+		// square picture beside round text is what looked out of place.
+		iconFrame(c, bitmap)
 		return
 	}
 	if result.Glyph != nil {
-		ui.Text(c, result.Glyph.Glyph).Font(result.Glyph.FontFamily).FontSize(20).Width(24).TextAlign(ui.Center)
+		ui.Text(c, result.Glyph.Glyph).
+			Font(result.Glyph.FontFamily).
+			FontSize(20).
+			Width(lookIconSize).
+			TextAlign(ui.Center)
 		return
 	}
 	// A result whose icon is missing keeps its place, so that the titles of
 	// the rows line up.
-	ui.Box(c).Size(24, 24)
+	ui.Box(c).Size(lookIconSize, lookIconSize)
 }
 
 // resultTitle draws the title with the characters the query matched in the

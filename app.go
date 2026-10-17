@@ -378,14 +378,13 @@ func (a *app) view(c *ui.Context) {
 	// mygo's theme answers on the main thread and waits for it.
 	a.systemIsDark = c.Theme().Dark
 	a.applyTheme(c)
+	// The launcher's own shape, painted onto the theme the window draws
+	// with: rounder, roomier, and the face the desktop of its own uses.
+	applyMacLook(c)
 	a.searchIfChanged()
 	a.resizeWindow(c)
 
-	t := c.Theme()
-	root := ui.Column(c).Fill().Clip()
-	if !c.Vibrancy() {
-		root.Background(t.Background)
-	}
+	root := windowView(c)
 
 	root.Children(func() {
 		a.queryBox(c)

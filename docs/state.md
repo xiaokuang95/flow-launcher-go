@@ -74,12 +74,14 @@ formatting, and the URL validation rules.
 browserbookmark, sys, shell, url, websearch, windowssettings,
 processkiller, pluginsmanager, pluginindicator
 
-**Interface**: a frameless window, icons, highlighted titles, subtitles,
-a selected row, a preview panel (F1), the menu of a result, the settings
-window (seven pages), a tray icon, a global hotkey, a single instance,
-starting at login, and game mode
+**Interface**: a frameless rounded window, rounded pictures, highlighted
+titles, subtitles, a tinted selected row, a preview panel (F1), the menu of
+a result, the settings window (seven pages of cards and switches), a
+plugin's own settings window, a plugin's results window, a tray icon, a
+global hotkey, a single instance, starting at login, and game mode. The
+look of every window is `look.go`.
 
-**Size**: 22,527 lines of Go, 191 tests, 14 packages green
+**Size**: 23,468 lines of Go, 299 tests, 15 packages green
 
 ## Deliberate differences from the reference
 
@@ -92,6 +94,7 @@ starting at login, and game mode
 | hosts such as `0.0.0.0` and `999.999.999.999` | .NET Uri's own rules | the behaviour .NET was measured to have, oddity included | checked case for case against the oracle |
 | the explorer's file search | the Windows Search index over OLE DB | a bounded walk of the user's folders (six levels, 20,000 entries) | the index provider refuses every query until it has been given a catalog and a property set (`DB_E_ERRORSINCOMMAND`); the `FileIndex` interface is there to put it back |
 | Firefox bookmarks | reads `places.sqlite` | not read | needs a SQLite driver, and no new dependency was wanted |
+| the look | sharp Windows 11 corners, a solid accent block on the chosen result, a row of bare fields in the settings | rounded windows, cards and rows, a tint of the accent on the chosen result, a switch per setting, the Segoe UI Variable face (`look.go`) | the user asked for the shape a desktop of its own draws rather than the reference's, for every window: the launcher, its settings, a plugin's settings and a plugin's own window |
 
 ## What is not done
 

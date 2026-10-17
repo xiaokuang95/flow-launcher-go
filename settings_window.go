@@ -42,15 +42,10 @@ var settingsPages = []string{
 func openSettingsWindow(a *app) {
 	if a.settingsWin == nil {
 		window := &settingsWindow{app: a}
-		window.win = mygo.NewWindow(mygo.WindowOptions{
-			Title:     core.T("", "flowlauncher_settings"),
-			Width:     900,
-			Height:    620,
-			MinWidth:  700,
-			MinHeight: 480,
-			StateKey:  "settings",
-			Content:   ui.View(window.view),
-		})
+		options := paneOptions(core.T("", "flowlauncher_settings"), 900, 700, "settings", window.view)
+		options.MinWidth = 700
+		options.MinHeight = 480
+		window.win = mygo.NewWindow(options)
 		a.settingsWin = window
 	}
 
@@ -65,43 +60,49 @@ func (s *settingsWindow) view(c *ui.Context) {
 	// seen as it is picked rather than after the window is closed.
 	s.app.systemIsDark = c.Theme().Dark
 	s.app.applyTheme(c)
+	applyMacLook(c)
 	t := c.Theme()
 
 	s.pageList.Selected = &s.page
 	s.pageList.Label = func(row int) string { return s.pageTitle(row) }
 
-	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(200).Padding(12).Gap(4).Background(t.Surface).Children(func() {
-			ui.Text(c, core.T("", "flowlauncher_settings")).FontSize(18).Bold().Padding(0, 0, 8, 8)
-			ui.List(c, &s.pageList, len(settingsPages), func(row int) {
-				text := ui.Text(c, s.pageTitle(row)).Padding(8, 10)
-				if row == s.page {
-					text.Background(t.Selection).Radius(6)
-				}
-			}).Grow(1)
-		})
+	root := paneView(c)
+	root.Children(func() {
+		ui.Row(c).Fill().Padding(windowPadding).Gap(12).AlignItems(ui.Stretch).Children(func() {
+			ui.Column(c).Width(188).Padding(10).Gap(2).Radius(cardRadius).Background(t.Surface).Children(func() {
+				ui.Text(c, core.T("", "flowlauncher_settings")).
+					FontSize(14).Bold().Padding(8, 4, 8, 10)
+				ui.List(c, &s.pageList, len(settingsPages), func(row int) {
+					text := ui.Text(c, s.pageTitle(row)).Padding(10, 8).FillWidth()
+					if row == s.page {
+						text.Background(selectionTint(t)).Radius(rowRadius).TextColor(t.Text)
+					}
+				}).Grow(1)
+			})
 
-		// A page taller than the window scrolls, so that every setting on
-		// it can be reached. The drop-downs are drawn beside the window
-		// and take the wheel themselves, so they are not held up by it.
-		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Padding(20).Gap(12).Children(func() {
-				switch settingsPages[s.page] {
-				case "general":
-					s.generalPage(c)
-				case "theme":
-					s.themePage(c)
-				case "hotkey":
-					s.hotkeyPage(c)
-				case "proxy":
-					s.proxyPage(c)
-				case "plugins":
-					s.pluginsPage(c)
-				case "pluginStore":
-					s.pluginStorePage(c)
-				case "about":
-					s.aboutPage(c)
-				}
+			// A page taller than the window scrolls, so that every setting
+			// on it can be reached. The drop-downs are drawn beside the
+			// window and take the wheel themselves, so they are not held up
+			// by it.
+			ui.Scroll(c).Grow(1).Children(func() {
+				ui.Column(c).Gap(10).Children(func() {
+					switch settingsPages[s.page] {
+					case "general":
+						s.generalPage(c)
+					case "theme":
+						s.themePage(c)
+					case "hotkey":
+						s.hotkeyPage(c)
+					case "proxy":
+						s.proxyPage(c)
+					case "plugins":
+						s.pluginsPage(c)
+					case "pluginStore":
+						s.pluginStorePage(c)
+					case "about":
+						s.aboutPage(c)
+					}
+				})
 			})
 		})
 	})
@@ -128,108 +129,110 @@ func (s *settingsWindow) pageTitle(row int) string {
 func (s *settingsWindow) generalPage(c *ui.Context) {
 	draft := &s.draft
 
-	ui.Text(c, core.T("", "general")).FontSize(20).Bold()
+	sectionTitle(c, core.T("", "general"))
 
-	s.field(c, core.T("", "language"), func() {
-		names := make([]string, 0, len(core.AvailableLanguages)+1)
-		codes := make([]string, 0, len(core.AvailableLanguages)+1)
-		names = append(names, core.SystemLanguageName(draft.Language))
-		codes = append(codes, core.SystemLanguageCode)
-		for _, language := range core.AvailableLanguages {
-			names = append(names, language.Display)
-			codes = append(codes, language.Code)
-		}
+	card(c).Children(func() {
+		s.field(c, core.T("", "language"), func() {
+			names := make([]string, 0, len(core.AvailableLanguages)+1)
+			codes := make([]string, 0, len(core.AvailableLanguages)+1)
+			names = append(names, core.SystemLanguageName(draft.Language))
+			codes = append(codes, core.SystemLanguageCode)
+			for _, language := range core.AvailableLanguages {
+				names = append(names, language.Display)
+				codes = append(codes, language.Code)
+			}
 
-		// The drop-down holds names, so the code is found from the name.
-		chosen := nameForCode(codes, names, draft.Language)
-		dropDown(c, "language", &chosen, names, func() {
-			if code := codeForName(names, codes, chosen); code != "" {
-				draft.Language = code
-				core.SetLanguage(draft.Language)
+			// The drop-down holds names, so the code is found from the name.
+			chosen := nameForCode(codes, names, draft.Language)
+			dropDown(c, "language", &chosen, names, func() {
+				if code := codeForName(names, codes, chosen); code != "" {
+					draft.Language = code
+					core.SetLanguage(draft.Language)
+					s.apply()
+				}
+			})
+		})
+
+		s.field(c, core.T("", "PlaceholderText"), func() {
+			if ui.TextInput(c, &draft.PlaceholderText).Width(220).Changed() {
 				s.apply()
 			}
 		})
-	})
 
-	s.field(c, core.T("", "PlaceholderText"), func() {
-		if ui.TextInput(c, &draft.PlaceholderText).Width(220).Changed() {
-			s.apply()
-		}
-	})
+		s.checkbox(c, core.T("", "hideFlowLauncherWhenLoseFocus"), &draft.HideWhenDeactivated)
+		s.checkbox(c, core.T("", "startFlowLauncherOnSystemStartup"), &draft.StartFlowLauncherOnSystemStartup)
+		s.checkbox(c, core.T("", "autoUpdates"), &draft.AutoUpdates)
+		s.checkbox(c, core.T("", "AlwaysPreview"), &draft.AlwaysPreview)
+		s.checkbox(c, core.T("", "homePage"), &draft.ShowHomePage)
+		s.checkbox(c, core.T("", "historyResultsForHomePage"), &draft.ShowHistoryResultsForHomePage)
 
-	s.checkbox(c, core.T("", "HideWhenDeactivated"), &draft.HideWhenDeactivated)
-	s.checkbox(c, core.T("", "startFlowLauncherOnSystemStartup"), &draft.StartFlowLauncherOnSystemStartup)
-	s.checkbox(c, core.T("", "autoUpdates"), &draft.AutoUpdates)
-	s.checkbox(c, core.T("", "AlwaysPreview"), &draft.AlwaysPreview)
-	s.checkbox(c, core.T("", "homePage"), &draft.ShowHomePage)
-	s.checkbox(c, core.T("", "historyResultsForHomePage"), &draft.ShowHistoryResultsForHomePage)
-
-	s.field(c, core.T("", "maxShowResults"), func() {
-		value := float64(draft.MaxResultsToShow)
-		if ui.Slider(c, &value, core.MinResultsToShow, core.MaxResultsToShowLimit).Width(220).Changed() {
-			draft.MaxResultsToShow = int(value + 0.5)
-			s.apply()
-		}
-	})
-
-	s.field(c, core.T("", "querySearchPrecision"), func() {
-		options := []string{"Regular", "Low", "None"}
-		chosen := draft.QuerySearchPrecision.String()
-		if ui.Select(c, &chosen, options).Width(220).Changed() {
-			switch chosen {
-			case "Low":
-				draft.QuerySearchPrecision = core.SearchPrecisionLow
-			case "None":
-				draft.QuerySearchPrecision = core.SearchPrecisionNone
-			default:
-				draft.QuerySearchPrecision = core.SearchPrecisionRegular
-			}
-			s.apply()
-		}
-	})
-
-	s.checkbox(c, core.T("", "ignoreAccents"), &draft.IgnoreAccents)
-
-	// A name written in Chinese is found by its pinyin, which is what the
-	// reference's own settings offer the same way.
-	s.checkbox(c, core.T("", "ShouldUsePinyin"), &draft.ShouldUsePinyin)
-	s.checkbox(c, core.T("", "UsePolyphonicPhraseOverrides"), &draft.UsePolyphonicPhraseOverrides)
-	s.checkbox(c, core.T("", "ShouldUseDoublePinyin"), &draft.UseDoublePinyin)
-
-	s.field(c, core.T("", "logLevel"), func() {
-		levels := []string{core.LogLevelDEBUG, core.LogLevelINFO, core.LogLevelERROR, core.LogLevelNONE}
-		names := make([]string, 0, len(levels))
-		for _, level := range levels {
-			names = append(names, core.T("", "LogLevel"+level))
-		}
-		chosen := nameForCode(levels, names, s.draft.LogLevel)
-		dropDown(c, "loglevel", &chosen, names, func() {
-			if level := codeForName(names, levels, chosen); level != "" {
-				s.draft.LogLevel = level
+		s.field(c, core.T("", "maxShowResults"), func() {
+			value := float64(draft.MaxResultsToShow)
+			if s.slider(c, &value, core.MinResultsToShow, core.MaxResultsToShowLimit) {
+				draft.MaxResultsToShow = int(value + 0.5)
 				s.apply()
 			}
 		})
-	})
 
-	s.field(c, core.T("", "DoublePinyinSchema"), func() {
-		codes := core.DoublePinyinSchemas
-		names := make([]string, 0, len(codes))
-		for _, code := range codes {
-			names = append(names, core.T("", "DoublePinyinSchemas"+code))
-		}
-		chosen := nameForCode(codes, names, draft.DoublePinyinSchema)
-		dropDown(c, "pinyin", &chosen, names, func() {
-			if code := codeForName(names, codes, chosen); code != "" {
-				draft.DoublePinyinSchema = code
+		s.field(c, core.T("", "querySearchPrecision"), func() {
+			options := []string{"Regular", "Low", "None"}
+			chosen := draft.QuerySearchPrecision.String()
+			if ui.Select(c, &chosen, options).Width(220).Changed() {
+				switch chosen {
+				case "Low":
+					draft.QuerySearchPrecision = core.SearchPrecisionLow
+				case "None":
+					draft.QuerySearchPrecision = core.SearchPrecisionNone
+				default:
+					draft.QuerySearchPrecision = core.SearchPrecisionRegular
+				}
 				s.apply()
 			}
+		})
+
+		s.checkbox(c, core.T("", "ignoreAccents"), &draft.IgnoreAccents)
+
+		// A name written in Chinese is found by its pinyin, which is what the
+		// reference's own settings offer the same way.
+		s.checkbox(c, core.T("", "ShouldUsePinyin"), &draft.ShouldUsePinyin)
+		s.checkbox(c, core.T("", "UsePolyphonicPhraseOverrides"), &draft.UsePolyphonicPhraseOverrides)
+		s.checkbox(c, core.T("", "ShouldUseDoublePinyin"), &draft.UseDoublePinyin)
+
+		s.field(c, core.T("", "logLevel"), func() {
+			levels := []string{core.LogLevelDEBUG, core.LogLevelINFO, core.LogLevelERROR, core.LogLevelNONE}
+			names := make([]string, 0, len(levels))
+			for _, level := range levels {
+				names = append(names, core.T("", "LogLevel"+level))
+			}
+			chosen := nameForCode(levels, names, s.draft.LogLevel)
+			dropDown(c, "loglevel", &chosen, names, func() {
+				if level := codeForName(names, levels, chosen); level != "" {
+					s.draft.LogLevel = level
+					s.apply()
+				}
+			})
+		})
+
+		s.field(c, core.T("", "DoublePinyinSchema"), func() {
+			codes := core.DoublePinyinSchemas
+			names := make([]string, 0, len(codes))
+			for _, code := range codes {
+				names = append(names, core.T("", "DoublePinyinSchemas"+code))
+			}
+			chosen := nameForCode(codes, names, draft.DoublePinyinSchema)
+			dropDown(c, "pinyin", &chosen, names, func() {
+				if code := codeForName(names, codes, chosen); code != "" {
+					draft.DoublePinyinSchema = code
+					s.apply()
+				}
+			})
 		})
 	})
 }
 
 // themePage picks the theme the launcher wears.
 func (s *settingsWindow) themePage(c *ui.Context) {
-	ui.Text(c, core.T("", "theme")).FontSize(20).Bold()
+	sectionTitle(c, core.T("", "theme"))
 
 	themes := core.AvailableThemes()
 	names := make([]string, 0, len(themes))
@@ -239,104 +242,113 @@ func (s *settingsWindow) themePage(c *ui.Context) {
 		codes = append(codes, theme.FileNameWithoutExtension)
 	}
 
-	s.field(c, core.T("", "theme"), func() {
-		chosen := nameForCode(codes, names, s.draft.Theme)
-		dropDown(c, "theme", &chosen, names, func() {
-			if code := codeForName(names, codes, chosen); code != "" {
-				s.draft.Theme = code
+	card(c).Children(func() {
+		s.field(c, core.T("", "theme"), func() {
+			chosen := nameForCode(codes, names, s.draft.Theme)
+			dropDown(c, "theme", &chosen, names, func() {
+				if code := codeForName(names, codes, chosen); code != "" {
+					s.draft.Theme = code
+					s.apply()
+				}
+			})
+		})
+
+		s.field(c, core.T("", "windowWidthSize"), func() {
+			width := s.draft.WindowSize
+			if s.slider(c, &width, 320, 1200) {
+				s.draft.WindowSize = width
 				s.apply()
 			}
 		})
-	})
 
-	s.field(c, core.T("", "windowWidthSize"), func() {
-		width := s.draft.WindowSize
-		if ui.Slider(c, &width, 320, 1200).Width(220).Changed() {
-			s.draft.WindowSize = width
-			s.apply()
-		}
-	})
+		s.field(c, core.T("", "resultItemFont"), func() {
+			size := float64(s.draft.ResultFontSize)
+			if size <= 0 {
+				size = 16
+			}
+			if s.slider(c, &size, 10, 28) {
+				s.draft.ResultFontSize = int(size + 0.5)
+				s.apply()
+			}
+		})
 
-	s.field(c, core.T("", "resultItemFont"), func() {
-		size := float64(s.draft.ResultFontSize)
-		if size <= 0 {
-			size = 16
-		}
-		if ui.Slider(c, &size, 10, 28).Width(220).Changed() {
-			s.draft.ResultFontSize = int(size + 0.5)
-			s.apply()
-		}
-	})
+		s.field(c, core.T("", "queryBoxFont"), func() {
+			size := float64(s.draft.QueryFontSize)
+			if size <= 0 {
+				size = 24
+			}
+			if s.slider(c, &size, 12, 40) {
+				s.draft.QueryFontSize = int(size + 0.5)
+				s.apply()
+			}
+		})
 
-	s.field(c, core.T("", "queryBoxFont"), func() {
-		size := float64(s.draft.QueryFontSize)
-		if size <= 0 {
-			size = 24
-		}
-		if ui.Slider(c, &size, 12, 40).Width(220).Changed() {
-			s.draft.QueryFontSize = int(size + 0.5)
-			s.apply()
-		}
-	})
+		s.field(c, core.T("", "resultSubItemFont"), func() {
+			size := float64(s.draft.ResultSubItemFontSize)
+			if size <= 0 {
+				size = 12
+			}
+			if s.slider(c, &size, 8, 24) {
+				s.draft.ResultSubItemFontSize = int(size + 0.5)
+				s.apply()
+			}
+		})
 
-	s.field(c, core.T("", "resultSubItemFont"), func() {
-		size := float64(s.draft.ResultSubItemFontSize)
-		if size <= 0 {
-			size = 12
-		}
-		if ui.Slider(c, &size, 8, 24).Width(220).Changed() {
-			s.draft.ResultSubItemFontSize = int(size + 0.5)
-			s.apply()
-		}
-	})
+		// The faces, which the reference offers as free text: what the desktop
+		// knows by that name is what is used.
+		s.field(c, core.T("", "queryBoxFont"), func() {
+			if ui.TextInput(c, &s.draft.QueryBoxFont).Width(220).Changed() {
+				s.apply()
+			}
+		})
+		s.field(c, core.T("", "resultItemFont"), func() {
+			if ui.TextInput(c, &s.draft.ResultFont).Width(220).Changed() {
+				s.apply()
+			}
+		})
 
-	// The faces, which the reference offers as free text: what the desktop
-	// knows by that name is what is used.
-	s.field(c, core.T("", "queryBoxFont"), func() {
-		if ui.TextInput(c, &s.draft.QueryBoxFont).Width(220).Changed() {
-			s.apply()
-		}
+		s.checkbox(c, core.T("", "useGlyphUI"), &s.draft.UseGlyphIcons)
+		s.checkbox(c, core.T("", "showBadges"), &s.draft.ShowBadges)
+		s.checkbox(c, core.T("", "showBadgesGlobalOnly"), &s.draft.ShowBadgesGlobalOnly)
 	})
-	s.field(c, core.T("", "resultItemFont"), func() {
-		if ui.TextInput(c, &s.draft.ResultFont).Width(220).Changed() {
-			s.apply()
-		}
-	})
-
-	s.checkbox(c, core.T("", "useGlyphUI"), &s.draft.UseGlyphIcons)
-	s.checkbox(c, core.T("", "showBadges"), &s.draft.ShowBadges)
-	s.checkbox(c, core.T("", "showBadgesGlobalOnly"), &s.draft.ShowBadgesGlobalOnly)
 }
 
 // hotkeyPage shows the keys the launcher answers to.
 func (s *settingsWindow) hotkeyPage(c *ui.Context) {
-	ui.Text(c, core.T("", "hotkey")).FontSize(20).Bold()
+	t := c.Theme()
 
-	s.field(c, core.T("", "openFlowLauncherHotkey"), func() {
-		if ui.TextInput(c, &s.draft.Hotkey).Width(220).Changed() {
-			s.apply()
-		}
+	sectionTitle(c, core.T("", "hotkey"))
+	card(c).Children(func() {
+		s.field(c, core.T("", "openFlowLauncherHotkey"), func() {
+			if ui.TextInput(c, &s.draft.Hotkey).Width(220).Changed() {
+				s.apply()
+			}
+		})
 	})
 
 	// The keys the user chose, which the reference's hotkey page offers the
 	// same way: each is a setting written as "Ctrl + Tab" or "F1".
-	ui.Text(c, core.T("", "hotkeyPresets")).FontSize(16).Bold().Padding(0, 8, 0, 0)
-	for _, binding := range changeableHotkeys(&s.draft) {
-		s.field(c, core.T("", binding.description), func() {
-			if ui.TextInput(c, binding.setting).Width(220).Changed() {
-				s.apply()
-			}
-		})
-	}
+	sectionTitle(c, core.T("", "hotkeyPresets"))
+	card(c).Children(func() {
+		for _, binding := range changeableHotkeys(&s.draft) {
+			s.field(c, core.T("", binding.description), func() {
+				if ui.TextInput(c, binding.setting).Width(220).Changed() {
+					s.apply()
+				}
+			})
+		}
+	})
 
 	// The keys that cannot be changed, shown so that they can be learned.
-	ui.Text(c, core.T("", "hotkeyPresets")).FontSize(16).Bold().Padding(0, 8, 0, 0)
-	for _, binding := range fixedHotkeys() {
-		ui.Row(c).Gap(12).Children(func() {
-			ui.Text(c, binding.keys).Width(160).Font("monospace")
-			ui.Text(c, core.T("", binding.description)).TextColor(c.Theme().TextMuted)
-		})
-	}
+	sectionTitle(c, core.T("", "hotkeyPresets"))
+	card(c).Children(func() {
+		for _, binding := range fixedHotkeys() {
+			ui.Row(c).Height(settingsRowHeight).Padding(14, 0).Gap(16).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, binding.keys).Width(160).Font("monospace")
+				ui.Text(c, core.T("", binding.description)).TextColor(t.TextMuted)
+			})
+		}
+	})
 }
 
 // changeableHotkeys are the keys the settings decide, with the setting each
@@ -369,36 +381,38 @@ func changeableHotkeys(settings *core.Settings) []struct {
 
 // proxyPage is the proxy the launcher and its plugins download through.
 func (s *settingsWindow) proxyPage(c *ui.Context) {
-	ui.Text(c, core.T("", "proxy")).FontSize(20).Bold()
+	sectionTitle(c, core.T("", "proxy"))
 
-	s.checkbox(c, core.T("", "enableProxy"), &s.draft.Proxy.Enabled)
-	s.field(c, core.T("", "server"), func() {
-		if ui.TextInput(c, &s.draft.Proxy.Server).Width(220).Changed() {
-			s.apply()
-		}
-	})
-	s.field(c, core.T("", "port"), func() {
-		port := float64(s.draft.Proxy.Port)
-		if ui.NumberInput(c, &port, 0, 65535, 1).Width(120).Changed() {
-			s.draft.Proxy.Port = int(port)
-			s.apply()
-		}
-	})
-	s.field(c, core.T("", "userName"), func() {
-		if ui.TextInput(c, &s.draft.Proxy.UserName).Width(220).Changed() {
-			s.apply()
-		}
-	})
-	s.field(c, core.T("", "password"), func() {
-		if ui.TextInput(c, &s.draft.Proxy.Password).Password().Width(220).Changed() {
-			s.apply()
-		}
+	card(c).Children(func() {
+		s.checkbox(c, core.T("", "enableProxy"), &s.draft.Proxy.Enabled)
+		s.field(c, core.T("", "server"), func() {
+			if ui.TextInput(c, &s.draft.Proxy.Server).Width(220).Changed() {
+				s.apply()
+			}
+		})
+		s.field(c, core.T("", "port"), func() {
+			port := float64(s.draft.Proxy.Port)
+			if ui.NumberInput(c, &port, 0, 65535, 1).Width(120).Changed() {
+				s.draft.Proxy.Port = int(port)
+				s.apply()
+			}
+		})
+		s.field(c, core.T("", "userName"), func() {
+			if ui.TextInput(c, &s.draft.Proxy.UserName).Width(220).Changed() {
+				s.apply()
+			}
+		})
+		s.field(c, core.T("", "password"), func() {
+			if ui.TextInput(c, &s.draft.Proxy.Password).Password().Width(220).Changed() {
+				s.apply()
+			}
+		})
 	})
 }
 
 // pluginsPage lists the launcher's plugins, with a switch for each.
 func (s *settingsWindow) pluginsPage(c *ui.Context) {
-	ui.Text(c, core.T("", "plugins")).FontSize(20).Bold()
+	sectionTitle(c, core.T("", "plugins"))
 
 	pairs := s.app.manager.AllLoadedPlugins()
 	if len(pairs) == 0 {
@@ -416,27 +430,6 @@ func (s *settingsWindow) pluginsPage(c *ui.Context) {
 	})
 }
 
-// openPluginSettingsAfterFrame opens a plugin's settings once the frame
-// being drawn is done. A window made while a frame is being built is not
-// drawn: mygo builds the frame it is in the middle of, and the window made
-// during it is left behind.
-func openPluginSettingsAfterFrame(a *app, pluginID string) {
-	if openPluginSettingsWindowHook != nil {
-		openPluginSettingsWindowHook(a, pluginID)
-		return
-	}
-	go func() {
-		// From another goroutine the call waits for the main thread, which
-		// is done with the frame by then.
-		mygo.RunOnMain(func() { openPluginSettingsWindow(a, pluginID) })
-	}()
-}
-
-// openPluginSettingsWindowHook, when set, is what the button of a plugin's
-// settings calls, so that a test watches the click without a window being
-// made.
-var openPluginSettingsWindowHook func(a *app, pluginID string) bool
-
 // pluginRow is one plugin in the list, with what it does and a switch.
 func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.PluginMetadata) {
 	stored, ok := s.app.plugins.GetPluginSettings(id)
@@ -446,16 +439,20 @@ func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.Plugi
 	enabled := !stored.Disabled
 	homeEnabled := !stored.HomeDisabled
 
-	ui.Column(c).Padding(10).Gap(4).Radius(8).Border(1, c.Theme().Border).Children(func() {
+	ui.Column(c).Padding(cardPadding).Gap(6).Radius(cardRadius).
+		Background(c.Theme().Surface).
+		Border(1, c.Theme().Border.Alpha(0.45)).Children(func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, metadata.Name).Bold().Grow(1)
 			ui.Switch(c, &enabled)
 		})
-		ui.Text(c, metadata.Description).FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, metadata.Description).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 
+		// What the plugin answers to, and whether it is on the home page:
+		// the two things the reference's list of plugins offers for each.
 		if metadata.ActionKeyword != "" {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, core.T("", "actionKeywords")).FontSize(12).Width(120)
+			ui.Row(c).Height(32).Gap(10).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, core.T("", "actionKeywords")).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
 				keyword := metadata.ActionKeyword
 				if ui.TextInput(c, &keyword).Width(120).Changed() {
 					stored.ActionKeywords = []string{keyword}
@@ -463,8 +460,8 @@ func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.Plugi
 			})
 		}
 
-		ui.Row(c).Gap(8).Children(func() {
-			ui.Text(c, core.T("", "homePage")).FontSize(12).Width(120)
+		ui.Row(c).Height(32).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, core.T("", "homePage")).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
 			ui.Switch(c, &homeEnabled)
 		})
 
@@ -472,12 +469,15 @@ func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.Plugi
 		// the reference's plugin list is.
 		if _, ok := pluginSettingsFor(s.app, id); ok {
 			label := strings.Replace(core.T("", "pluginSettingsWindowTitle"), "{0}", metadata.Name, 1)
-			if ui.Button(c, label).Clicked() {
-				// The window is made after this frame: a window created
-				// while one is being drawn is not drawn itself, which is
-				// what made the button do nothing.
-				openPluginSettingsAfterFrame(s.app, id)
-			}
+			ui.Row(c).Children(func() {
+				if ui.Button(c, label).Clicked() {
+					// The window is made after this frame: a window created
+					// while one is being drawn is not drawn itself, which is
+					// what made the button do nothing.
+					openPluginSettingsAfterFrame(s.app, id)
+				}
+				ui.Box(c).Grow(1)
+			})
 		}
 	})
 
@@ -502,7 +502,7 @@ func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.Plugi
 // and every row built is work done on every frame.
 func (s *settingsWindow) pluginStorePage(c *ui.Context) {
 	s.storeDrawn = 0
-	ui.Text(c, core.T("", "pluginStore")).FontSize(20).Bold()
+	sectionTitle(c, core.T("", "pluginStore"))
 
 	manifest := s.app.pluginManifest()
 	if len(manifest) == 0 {
@@ -513,37 +513,39 @@ func (s *settingsWindow) pluginStorePage(c *ui.Context) {
 		return
 	}
 
-	// What is typed narrows the list, as it does in the reference.
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, core.T("", "searchplugin")).Width(200)
-		if ui.TextInput(c, &s.storeFilter).Width(240).Changed() {
-			s.storeList.Selected = nil
-			s.storeShown = nil
-		}
-	})
+	card(c).Children(func() {
+		// What is typed narrows the list, as it does in the reference.
+		ui.Row(c).Height(settingsRowHeight).Padding(14, 0).Gap(16).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, core.T("", "searchplugin")).Width(settingsLabelWidth)
+			if ui.TextInput(c, &s.storeFilter).Width(240).Changed() {
+				s.storeList.Selected = nil
+				s.storeShown = nil
+			}
+		})
 
-	shown := s.storeRows(manifest)
-	if len(shown) == 0 {
-		ui.Text(c, core.T("", "searchplugin_Noresult_Title")).TextColor(c.Theme().TextMuted)
-		return
-	}
-
-	s.storeList.Selected = nil
-	s.storeList.Label = func(row int) string {
-		if row < len(shown) {
-			return shown[row].Name
-		}
-		return ""
-	}
-
-	// The list is given a height of its own, so that it works out how many
-	// rows fit and builds only those: a store of hundreds of plugins drawn
-	// on every frame is what made this page slow.
-	ui.List(c, &s.storeList, len(shown)).Height(storeListHeight).Rows(func(row ui.ListRow) {
-		if row.Index < 0 || row.Index >= len(shown) {
+		shown := s.storeRows(manifest)
+		if len(shown) == 0 {
+			ui.Text(c, core.T("", "searchplugin_Noresult_Title")).TextColor(c.Theme().TextMuted).Padding(14, 12)
 			return
 		}
-		s.storeRow(row, shown[row.Index])
+
+		s.storeList.Selected = nil
+		s.storeList.Label = func(row int) string {
+			if row < len(shown) {
+				return shown[row].Name
+			}
+			return ""
+		}
+
+		// The list is given a height of its own, so that it works out how
+		// many rows fit and builds only those: a store of hundreds of
+		// plugins drawn on every frame is what made this page slow.
+		ui.List(c, &s.storeList, len(shown)).Height(storeListHeight).Rows(func(row ui.ListRow) {
+			if row.Index < 0 || row.Index >= len(shown) {
+				return
+			}
+			s.storeRow(row, shown[row.Index])
+		})
 	})
 }
 
@@ -595,27 +597,40 @@ func (s *settingsWindow) storeRows(manifest []core.UserPlugin) []core.UserPlugin
 
 // aboutPage says what this is.
 func (s *settingsWindow) aboutPage(c *ui.Context) {
-	ui.Text(c, core.T("", "about")).FontSize(20).Bold()
-	ui.Text(c, "Flow Launcher "+version).Bold()
-	ui.Text(c, core.T("", "aboutDescription")).TextColor(c.Theme().TextMuted)
-	ui.Textf(c, "%s: %s", core.T("", "plugins"), fmt.Sprint(len(s.app.manager.AllLoadedPlugins())))
-	ui.Textf(c, "%s: %s", core.T("", "pluginDirectory"), s.app.dataDir).Selectable().FontSize(12)
-	ui.Text(c, core.Tf("", "about_activate_times", fmt.Sprint(s.app.settings.ActivateTimes))).FontSize(12)
+	t := c.Theme()
+
+	sectionTitle(c, core.T("", "about"))
+	card(c).Children(func() {
+		ui.Column(c).Gap(6).Children(func() {
+			ui.Text(c, "Flow Launcher "+version).Bold()
+			ui.Text(c, core.T("", "aboutDescription")).TextColor(t.TextMuted)
+			ui.Textf(c, "%s: %s", core.T("", "plugins"), fmt.Sprint(len(s.app.manager.AllLoadedPlugins())))
+			ui.Textf(c, "%s: %s", core.T("", "pluginDirectory"), s.app.dataDir).Selectable().FontSize(12)
+			ui.Text(c, core.Tf("", "about_activate_times", fmt.Sprint(s.app.settings.ActivateTimes))).FontSize(12)
+		})
+	})
 }
 
 // checkbox is a setting that is on or off.
 func (s *settingsWindow) checkbox(c *ui.Context, label string, value *bool) {
-	if ui.Checkbox(c, value, label).Changed() {
-		s.apply()
-	}
+	settingsRow(c, label, func() {
+		if ui.Switch(c, value).Changed() {
+			s.apply()
+		}
+	})
 }
 
 // field is a setting with its label beside it.
 func (s *settingsWindow) field(c *ui.Context, label string, build func()) {
-	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).Width(200)
-		build()
-	})
+	settingsRow(c, label, build)
+}
+
+// slider is a number the user sets by dragging, with the number it is on
+// shown beside it: a track alone does not say what is chosen.
+func (s *settingsWindow) slider(c *ui.Context, value *float64, lo, hi float64) bool {
+	changed := ui.Slider(c, value, lo, hi).Width(180).Changed()
+	ui.Text(c, itoa(int(*value+0.5))).Width(36).TextColor(c.Theme().TextMuted)
+	return changed
 }
 
 // apply writes the draft settings out and tells the launcher about them.

@@ -58,15 +58,18 @@ func (a *app) showResultsWindow(window core.ResultsWindow) {
 
 	a.rememberForeground()
 	shown := &resultsWindow{app: a, window: window}
-	shown.win = mygo.NewWindow(mygo.WindowOptions{
-		Title:     window.Title,
-		Width:     resultsWindowWidth,
-		Height:    resultsWindowHeight,
-		MinWidth:  320,
-		MinHeight: 240,
-		StateKey:  "plugin-results-" + window.PluginID,
-		Content:   ui.View(shown.view),
-	})
+	options := windowOptions(window.Title, resultsWindowWidth, resultsWindowHeight,
+		"plugin-results-"+window.PluginID, shown.view)
+	options.MinWidth = 320
+	options.MinHeight = 240
+	options.Frameless = true
+	options.DisableResize = true
+	options.DisableMaximize = true
+	options.SkipTaskbar = true
+	// The window is opened at a keystroke over whatever the user was doing,
+	// so it goes above it as the launcher's own window does.
+	options.AlwaysOnTop = a.settings.ShowAtTopmost
+	shown.win = mygo.NewWindow(options)
 	shown.win.OnBlur(func() {
 		if a.settings.HideWhenDeactivated {
 			shown.close()
@@ -114,10 +117,12 @@ func (w *resultsWindow) search(query string) {
 // view builds the window: the query box, then the results.
 func (w *resultsWindow) view(c *ui.Context) {
 	w.app.applyTheme(c)
+	applyMacLook(c)
 	t := c.Theme()
 
-	ui.Column(c).Fill().Clip().Background(t.Background).Children(func() {
-		ui.Row(c).Height(queryBoxHeight).Padding(12, 10).Gap(10).AlignItems(ui.Center).Children(func() {
+	root := windowView(c)
+	root.Children(func() {
+		ui.Row(c).Height(queryBoxHeight).Padding(4, 8).Gap(10).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, searchIcon()).FontSize(18).TextColor(t.TextMuted)
 			input := ui.TextInputBase(c, &w.query).
 				Bind(&w.input).
@@ -148,7 +153,6 @@ func (w *resultsWindow) view(c *ui.Context) {
 				TextColor(t.TextMuted).Padding(12, 16)
 			return
 		}
-
 		// What the chosen result holds is shown beside the list, when the
 		// plugin gave something to look at.
 		if w.showsPreview() {
@@ -164,19 +168,16 @@ func (w *resultsWindow) view(c *ui.Context) {
 func (w *resultsWindow) resultsView(c *ui.Context) {
 	t := c.Theme()
 
-	ui.List(c, &w.list, len(w.results)).Grow(1).Rows(func(row ui.ListRow) {
+	ui.List(c, &w.list, len(w.results)).Grow(1).Padding(4, 8).Rows(func(row ui.ListRow) {
 		if row.Index < 0 || row.Index >= len(w.results) {
 			return
 		}
 		result := w.results[row.Index]
 
-		element := ui.Row(row.Context).Height(resultHeight).Padding(0, 12).Gap(12).AlignItems(ui.Center)
-		if row.Index == w.selection {
-			element.Background(t.Selection)
-		}
+		element := resultRow(row.Context, row.Index == w.selection)
 		element.Children(func() {
 			w.app.resultIcon(row.Context, result)
-			ui.Column(row.Context).Grow(1).Gap(2).Children(func() {
+			ui.Column(row.Context).Grow(1).Gap(1).Children(func() {
 				ui.Text(row.Context, result.Title).
 					FontSize(float32(w.app.resultFontSize())).
 					SingleLine()

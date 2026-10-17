@@ -41,10 +41,13 @@ func dropDownState(name string) *ui.ScrollState {
 // the user chooses one.
 func dropDown(c *ui.Context, name string, selected *string, choices []string, changed func()) {
 	sel := ui.SelectBase(c, selected)
-	sel.Trigger.Width(220).Padding(6, 10).Radius(6).
+	sel.Trigger.Width(220).Padding(6, 10).Radius(8).
 		Border(1, c.Theme().Border).Background(c.Theme().Surface)
 	sel.Trigger.Children(func() {
 		ui.Text(c, *selected).SingleLine().Grow(1)
+		// The mark of a list of choices, which the select of mygo draws itself
+		// and this one has to draw for itself.
+		ui.Icon(c, chevronIcon()).FontSize(12).TextColor(c.Theme().TextMuted)
 	})
 
 	state := dropDownState(name)
@@ -54,7 +57,7 @@ func dropDown(c *ui.Context, name string, selected *string, choices []string, ch
 	}
 
 	sel.Popup(func(panel ui.Element) {
-		panel.Padding(4).Radius(8).Border(1, c.Theme().Border).Background(c.Theme().Background)
+		panel.Padding(4).Radius(cardRadius).Border(1, c.Theme().Border).Background(c.Theme().Background)
 
 		list := ui.Scroll(c).
 			Height(float32(rows) * dropDownRowHeight).
@@ -71,10 +74,10 @@ func dropDown(c *ui.Context, name string, selected *string, choices []string, ch
 		list.Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
 				for _, choice := range choices {
-					item := sel.Item(choice).Padding(6, 10).Radius(6).Height(dropDownRowHeight)
+					item := sel.Item(choice).Padding(6, 10).Radius(rowRadius - 2).Height(dropDownRowHeight)
 					switch {
 					case item.Highlighted():
-						item.Background(c.Theme().Accent)
+						item.Background(selectionTint(c.Theme())).TextColor(c.Theme().Text)
 					case choice == *selected:
 						item.Background(c.Theme().Surface)
 					}

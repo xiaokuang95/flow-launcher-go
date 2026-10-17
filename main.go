@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 
 	"launch/core"
 )
@@ -140,21 +139,19 @@ func (a *app) createWindow() {
 	// From here on the clipboard can be read, which is answered on the
 	// thread the window lives on.
 	windowUp.Store(true)
-	a.win = mygo.NewWindow(mygo.WindowOptions{
-		Title:             "Flow Launcher",
-		Width:             int(a.settings.WindowSize),
-		Height:            int(a.settings.WindowHeightSize) + a.settings.MaxResultsToShow*resultHeight,
-		MinWidth:          320,
-		Frameless:         true,
-		DisableResize:     true,
-		DisableMaximize:   true,
-		DisableMinimize:   true,
-		DisableFullScreen: true,
-		SkipTaskbar:       true,
-		AlwaysOnTop:       a.settings.ShowAtTopmost,
-		Hidden:            true,
-		Content:           ui.View(a.view),
-	})
+	options := windowOptions("Flow Launcher",
+		int(a.settings.WindowSize),
+		int(a.settings.WindowHeightSize)+int(a.settings.MaxResultsToShow*resultHeight),
+		"", a.view)
+	options.Frameless = true
+	options.DisableResize = true
+	options.DisableMaximize = true
+	options.DisableMinimize = true
+	options.DisableFullScreen = true
+	options.SkipTaskbar = true
+	options.AlwaysOnTop = a.settings.ShowAtTopmost
+	options.Hidden = true
+	a.win = mygo.NewWindow(options)
 	a.win.OnBlur(func() {
 		// A window being captured is not one the user has left.
 		if a.settings.HideWhenDeactivated && capturePath() == "" {
