@@ -73,6 +73,9 @@ type Hooks struct {
 	// PasteIntoWindow puts what is on the clipboard into the window the
 	// user came from, as Ctrl+V does.
 	PasteIntoWindow func()
+	// RegisterHotkey binds a key that shows the launcher with a query, and
+	// reports whether the system took it.
+	RegisterHotkey func(hotkey string, query string) bool
 }
 
 // MessageBoxButtons and MessageBoxIcon are what a message box offers.
@@ -398,6 +401,16 @@ func (a *PublicAPI) UpdatePluginManifest(usePrimaryURLOnly bool) error {
 		return fmt.Errorf("the launcher is not ready to update the plugin list")
 	}
 	return a.Hooks.UpdatePluginManifest(usePrimaryURLOnly)
+}
+
+// RegisterHotkey binds a key that shows the launcher with a query, which is
+// how a plugin offers what it holds at one keystroke: the clipboard history
+// at Alt+C, say.
+func (a *PublicAPI) RegisterHotkey(hotkey, query string) bool {
+	if a.Hooks.RegisterHotkey == nil || hotkey == "" {
+		return false
+	}
+	return a.Hooks.RegisterHotkey(hotkey, query)
 }
 
 // RegisterGlobalKeyboardCallback is told about every key press, and reports

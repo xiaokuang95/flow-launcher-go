@@ -173,6 +173,30 @@ func matcherFor(settings *core.Settings) core.StringMatcher {
 	return matcher
 }
 
+// registerPluginHotkey binds a key that shows the launcher with a query,
+// which is how a plugin offers what it holds at one keystroke.
+func (a *app) registerPluginHotkey(hotkey, query string) bool {
+	// mygo binds keys on the thread the window lives on, so a launcher
+	// without one — a probe, a test — binds nothing rather than waiting
+	// for a thread that never comes.
+	if !windowUp.Load() {
+		return false
+	}
+
+	go func() {
+		err := mygo.GlobalShortcut.Register(hotkey, func() {
+			a.update(func() {
+				a.show()
+				a.setQuery(query)
+			})
+		})
+		if err != nil {
+			a.api.LogError("launcher", "binding "+hotkey+" failed: "+err.Error())
+		}
+	}()
+	return true
+}
+
 // readClipboard reads what the machine's clipboard holds, which is one of
 // text, files or a picture. The launcher's own clipboard module is asked,
 // since it is the only part that may touch the clipboard, and it answers on
@@ -260,6 +284,7 @@ func (a *app) hooks() core.Hooks {
 		CopyToClipboard:     func(text string, directCopy, notify bool) { a.copyToClipboard(text, directCopy, notify) },
 		ReadClipboard:       readClipboard,
 		PasteIntoWindow:     a.pasteIntoWindow,
+		RegisterHotkey:      a.registerPluginHotkey,
 		ShowMsg:             func(title, subTitle, icon string) { a.notify(title, subTitle) },
 		ShowMsgError:        func(title, subTitle string) { a.notify(title, subTitle) },
 		OpenDirectory:       openDirectory,

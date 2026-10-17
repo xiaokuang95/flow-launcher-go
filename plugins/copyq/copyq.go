@@ -30,6 +30,9 @@ var languages embed.FS
 type Settings struct {
 	// ActionKeyword is what the history answers to.
 	ActionKeyword string `json:"ActionKeyword"`
+	// Hotkey shows the launcher with the history at one keystroke, as
+	// CopyQ's own hotkey does. Empty binds nothing.
+	Hotkey string `json:"Hotkey"`
 	// MaxItems is how many items are kept, the pinned ones not counted.
 	MaxItems int `json:"MaxItems"`
 	// WatchText, WatchFiles and WatchImages say which of the things the
@@ -47,12 +50,49 @@ type Settings struct {
 	// IgnoreShortcut is the word the launcher's own shortcut is written
 	// with, which is left out of the history.
 	IgnoreShortcut string `json:"IgnoreShortcut"`
+	// Version is which build's settings the file holds, so that a file
+	// written before a setting existed can be filled in.
+	Version int `json:"Version"`
 }
+
+// applyDefaults fills in what a settings file written by an older build
+// does not say.
+func (s *Settings) applyDefaults() {
+	defaults := DefaultSettings()
+
+	if s.ActionKeyword == "" {
+		s.ActionKeyword = defaults.ActionKeyword
+	}
+	if s.MaxItems <= 0 {
+		s.MaxItems = defaults.MaxItems
+	}
+	if s.Hotkey == "" {
+		s.Hotkey = defaults.Hotkey
+	}
+	if s.IgnoreShortcut == "" {
+		s.IgnoreShortcut = defaults.IgnoreShortcut
+	}
+	// The switches cannot tell "off" from "not written", so a file that
+	// was written before there were any is the one that does not say. It
+	// is written from now on, which is what Version is for.
+	if s.Version == 0 {
+		s.WatchText = defaults.WatchText
+		s.WatchFiles = defaults.WatchFiles
+		s.WatchImages = defaults.WatchImages
+		s.PasteAfterChoosing = defaults.PasteAfterChoosing
+	}
+	s.Version = settingsVersion
+}
+
+// settingsVersion is what the settings a file holds are as they are now,
+// which says whether a file written by an older build needs filling in.
+const settingsVersion = 1
 
 // DefaultSettings are the settings a user who changed nothing gets.
 func DefaultSettings() Settings {
 	return Settings{
 		ActionKeyword:      "cb",
+		Hotkey:             "Alt+C",
 		MaxItems:           defaultLimit,
 		WatchText:          true,
 		WatchFiles:         true,
@@ -60,6 +100,7 @@ func DefaultSettings() Settings {
 		PasteAfterChoosing: true,
 		IgnoreShortText:    0,
 		IgnoreShortcut:     "{clipboard}",
+		Version:            settingsVersion,
 	}
 }
 
@@ -167,9 +208,15 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 	p.installImages(ctx)
 	p.api = ctx.API
 	p.words = core.NewPluginTranslator(languages, "Languages")
-	p.settings = core.LoadSettingJsonStorage[Settings](ctx.API, "CopyQ", "Settings.json")
-	if p.settings.ActionKeyword == "" {
-		p.settings = DefaultSettings()
+	loaded := core.LoadSettingJsonStorage[Settings](ctx.API, "CopyQ", "Settings.json")
+	p.settings = loaded
+	// A settings file written by an older build says nothing about what it
+	// did not have, so what it leaves empty is filled in, and written back
+	// so that the file says what the launcher is doing.
+	before := p.settings
+	p.settings.applyDefaults()
+	if before != p.settings {
+		p.Save()
 	}
 	if p.clipboard == nil {
 		p.clipboard = systemClipboard{api: ctx.API}
@@ -185,6 +232,11 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 	// The metadata the launcher matches the query against comes from the
 	// settings, so that the user can change the keyword.
 	p.Meta.ActionKeywords = []string{p.settings.ActionKeyword}
+
+	// The key that shows the history, as CopyQ's own hotkey shows it.
+	if p.settings.Hotkey != "" {
+		p.api.RegisterHotkey(p.settings.Hotkey, p.settings.ActionKeyword)
+	}
 
 	p.watch()
 	return nil
