@@ -193,6 +193,7 @@ func (a *app) show() {
 
 // hide takes the launcher down.
 func (a *app) hide() {
+	a.closeResultsWindows()
 	if a.win == nil {
 		return
 	}

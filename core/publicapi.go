@@ -73,9 +73,14 @@ type Hooks struct {
 	// PasteIntoWindow puts what is on the clipboard into the window the
 	// user came from, as Ctrl+V does.
 	PasteIntoWindow func()
-	// RegisterHotkey binds a key that shows the launcher with a query, and
-	// reports whether the system took it.
-	RegisterHotkey func(hotkey string, query string) bool
+	// RegisterHotkey binds a key that runs an action, and reports whether
+	// the system took it.
+	RegisterHotkey func(hotkey string, action func()) bool
+	// ShowResultsWindow shows results in a window of their own, which is
+	// what a plugin offers at one keystroke.
+	ShowResultsWindow func(window ResultsWindow)
+	// CloseResultsWindow closes the window of a plugin's results.
+	CloseResultsWindow func(pluginID string)
 }
 
 // MessageBoxButtons and MessageBoxIcon are what a message box offers.
@@ -403,14 +408,46 @@ func (a *PublicAPI) UpdatePluginManifest(usePrimaryURLOnly bool) error {
 	return a.Hooks.UpdatePluginManifest(usePrimaryURLOnly)
 }
 
-// RegisterHotkey binds a key that shows the launcher with a query, which is
-// how a plugin offers what it holds at one keystroke: the clipboard history
-// at Alt+C, say.
-func (a *PublicAPI) RegisterHotkey(hotkey, query string) bool {
-	if a.Hooks.RegisterHotkey == nil || hotkey == "" {
+// ResultsWindow is a window of a plugin's own, showing what the plugin
+// holds: the clipboard history at one keystroke, say. The user types to
+// narrow it and chooses with the keys.
+type ResultsWindow struct {
+	// PluginID names the plugin the window belongs to, so that the launcher
+	// shows one window per plugin and closes it again.
+	PluginID string
+	// Title is what the window is called.
+	Title string
+	// Placeholder is what the empty query box says.
+	Placeholder string
+	// Search answers what the user typed with what to show.
+	Search func(query string) []Result
+	// Choose runs the result the user chose, and reports whether the window
+	// stays open. The window closes by itself otherwise.
+	Choose func(result Result) bool
+}
+
+// RegisterHotkey binds a key that runs an action, which is how a plugin
+// offers what it holds at one keystroke: the clipboard history at Alt+C.
+func (a *PublicAPI) RegisterHotkey(hotkey string, action func()) bool {
+	if a.Hooks.RegisterHotkey == nil || hotkey == "" || action == nil {
 		return false
 	}
-	return a.Hooks.RegisterHotkey(hotkey, query)
+	return a.Hooks.RegisterHotkey(hotkey, action)
+}
+
+// ShowResultsWindow shows a plugin's results in a window of their own, or
+// brings the one it has forward.
+func (a *PublicAPI) ShowResultsWindow(window ResultsWindow) {
+	if a.Hooks.ShowResultsWindow != nil {
+		a.Hooks.ShowResultsWindow(window)
+	}
+}
+
+// CloseResultsWindow closes the window of a plugin's results.
+func (a *PublicAPI) CloseResultsWindow(pluginID string) {
+	if a.Hooks.CloseResultsWindow != nil {
+		a.Hooks.CloseResultsWindow(pluginID)
+	}
 }
 
 // RegisterGlobalKeyboardCallback is told about every key press, and reports

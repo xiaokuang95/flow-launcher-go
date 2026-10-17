@@ -236,9 +236,10 @@ func (p *Plugin) Init(ctx *core.PluginInitContext) error {
 	// settings, so that the user can change the keyword.
 	p.Meta.ActionKeywords = []string{p.settings.ActionKeyword}
 
-	// The key that shows the history, as CopyQ's own hotkey shows it.
+	// The key that shows the history in a window of its own, as CopyQ's
+	// own hotkey shows it: the launcher's search box is left as it is.
 	if p.settings.Hotkey != "" {
-		p.api.RegisterHotkey(p.settings.Hotkey, p.settings.ActionKeyword)
+		p.api.RegisterHotkey(p.settings.Hotkey, p.showWindow)
 	}
 
 	p.watch()
@@ -292,6 +293,50 @@ func (p *Plugin) watch() {
 			}
 		}
 	}()
+}
+
+// showWindow shows the history in a window of the plugin's own, which is
+// what the hotkey does: the launcher's own window keeps its search box.
+func (p *Plugin) showWindow() {
+	p.capture()
+	p.api.ShowResultsWindow(core.ResultsWindow{
+		PluginID:    p.Meta.ID,
+		Title:       p.words.T("plugin_copyq_window_title"),
+		Placeholder: p.words.T("plugin_copyq_window_placeholder"),
+		Search:      p.resultsFor,
+		Choose: func(result core.Result) bool {
+			p.chooseResult(result)
+			return false
+		},
+	})
+}
+
+// resultsFor is the history as results for what the user typed in the
+// plugin's own window.
+func (p *Plugin) resultsFor(search string) []core.Result {
+	results, err := p.Query(context.Background(), core.Query{
+		Search:        search,
+		TrimmedQuery:  search,
+		OriginalQuery: search,
+	})
+	if err != nil {
+		return nil
+	}
+	return results
+}
+
+// chooseResult puts the item a result stands for back on the clipboard, and
+// pastes it when the user asked for that.
+func (p *Plugin) chooseResult(result core.Result) {
+	item, ok := result.ContextData.(Item)
+	if !ok {
+		return
+	}
+	index := p.indexOf(item)
+	if index < 0 {
+		return
+	}
+	p.choose(index, p.settings.PasteAfterChoosing)
 }
 
 // Stop leaves off watching the clipboard.

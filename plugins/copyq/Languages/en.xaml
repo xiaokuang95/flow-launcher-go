@@ -9,4 +9,6 @@
     <system:String x:Key="plugin_copyq_choose">Put it back on the clipboard</system:String>
     <system:String x:Key="plugin_copyq_paste">Copy and paste</system:String>
     <system:String x:Key="plugin_copyq_empty">The clipboard history is empty</system:String>
+    <system:String x:Key="plugin_copyq_window_title">Clipboard history</system:String>
+    <system:String x:Key="plugin_copyq_window_placeholder">Search the clipboard history</system:String>
 </ResourceDictionary>

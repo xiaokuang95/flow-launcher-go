@@ -406,6 +406,49 @@ func (c writingClipboard) Write(item Item) error {
 	return nil
 }
 
+func TestTheHotkeyShowsAWindowOfItsOwn(t *testing.T) {
+	clipboard := &fakeClipboard{content: core.ClipboardContent{Kind: core.ClipboardText, Text: "what the clipboard held"}}
+	plugin, _ := newTestPlugin(t, clipboard)
+
+	// What the launcher is asked to show, which is what the hotkey does.
+	var shown core.ResultsWindow
+	plugin.api.Hooks.ShowResultsWindow = func(window core.ResultsWindow) { shown = window }
+	plugin.api.Hooks.RegisterHotkey = func(hotkey string, action func()) bool {
+		if hotkey != "Alt+C" {
+			t.Errorf("the key is %q, want the one in the settings", hotkey)
+		}
+		action()
+		return true
+	}
+
+	// Init is what binds the key, and pressing it is what shows the window.
+	plugin.Init(&core.PluginInitContext{API: plugin.api, CurrentPluginMetadata: plugin.Meta})
+
+	if shown.PluginID != plugin.Meta.ID {
+		t.Fatalf("the window is the plugin's %q", shown.PluginID)
+	}
+	if shown.Title == "" || shown.Placeholder == "" {
+		t.Errorf("the window has no title or placeholder: %+v", shown)
+	}
+
+	// Its search is the history, and choosing one is what Enter does.
+	results := shown.Search("")
+	if len(results) != 1 || results[0].Title != "what the clipboard held" {
+		t.Fatalf("the window shows %v", titlesOf(results))
+	}
+	if keep := shown.Choose(results[0]); keep {
+		t.Errorf("the window stays open after a choice")
+	}
+	if len(clipboard.written) != 1 || clipboard.written[0].Text != "what the clipboard held" {
+		t.Errorf("the clipboard was given %v, want the chosen item", clipboard.written)
+	}
+
+	// And it is not the launcher's search box that was filled in.
+	if plugin.api.Hooks.ChangeQuery != nil {
+		t.Errorf("the hotkey changed the launcher's query, which is what the window is for")
+	}
+}
+
 func TestTheHistoryIsKeptBetweenRuns(t *testing.T) {
 	clipboard := &fakeClipboard{}
 	plugin, _ := newTestPlugin(t, clipboard)
