@@ -416,6 +416,27 @@ func (s *settingsWindow) pluginsPage(c *ui.Context) {
 	})
 }
 
+// openPluginSettingsAfterFrame opens a plugin's settings once the frame
+// being drawn is done. A window made while a frame is being built is not
+// drawn: mygo builds the frame it is in the middle of, and the window made
+// during it is left behind.
+func openPluginSettingsAfterFrame(a *app, pluginID string) {
+	if openPluginSettingsWindowHook != nil {
+		openPluginSettingsWindowHook(a, pluginID)
+		return
+	}
+	go func() {
+		// From another goroutine the call waits for the main thread, which
+		// is done with the frame by then.
+		mygo.RunOnMain(func() { openPluginSettingsWindow(a, pluginID) })
+	}()
+}
+
+// openPluginSettingsWindowHook, when set, is what the button of a plugin's
+// settings calls, so that a test watches the click without a window being
+// made.
+var openPluginSettingsWindowHook func(a *app, pluginID string) bool
+
 // pluginRow is one plugin in the list, with what it does and a switch.
 func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.PluginMetadata) {
 	stored, ok := s.app.plugins.GetPluginSettings(id)
@@ -452,7 +473,10 @@ func (s *settingsWindow) pluginRow(c *ui.Context, id string, metadata core.Plugi
 		if _, ok := pluginSettingsFor(s.app, id); ok {
 			label := strings.Replace(core.T("", "pluginSettingsWindowTitle"), "{0}", metadata.Name, 1)
 			if ui.Button(c, label).Clicked() {
-				openPluginSettingsWindow(s.app, id)
+				// The window is made after this frame: a window created
+				// while one is being drawn is not drawn itself, which is
+				// what made the button do nothing.
+				openPluginSettingsAfterFrame(s.app, id)
 			}
 		}
 	})

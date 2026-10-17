@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"syscall"
 	"unsafe"
@@ -12,11 +13,11 @@ import (
 // whatever window is in front: choosing a clipboard item copies it and
 // then pastes it where the user was.
 func pasteKeys() error {
-	inputs := []keyboardInput{
-		{virtualKey: vkControl},
-		{virtualKey: 'V'},
-		{virtualKey: 'V', flags: keyUp},
-		{virtualKey: vkControl, flags: keyUp},
+	inputs := []inputEvent{
+		keyDown(vkControl),
+		keyDown('V'),
+		keyUpEvent('V'),
+		keyUpEvent(vkControl),
 	}
 
 	sent, _, err := procSendInput.Call(
@@ -28,6 +29,33 @@ func pasteKeys() error {
 		return err
 	}
 	return nil
+}
+
+// inputEvent is one event, as SendInput reads it: what kind of event it is,
+// then the event itself, which is as large as the largest kind — a mouse's.
+// The system checks the size it is given, so it has to be the whole of it.
+type inputEvent struct {
+	kind uint32
+	_    uint32
+	// body is the event: a keyboard's, which is a key, the scan code, the
+	// flags, the time and the extra information.
+	body [32]byte
+}
+
+// keyDown is a key being pressed, and keyUpEvent the same key let go.
+func keyDown(key uint16) inputEvent { return keyEvent(key, 0) }
+func keyUpEvent(key uint16) inputEvent {
+	return keyEvent(key, keyUp)
+}
+
+// keyEvent is one key press or release, written where the system reads it:
+// the key first, then the scan code, the flags, the time and the extra
+// information.
+func keyEvent(key uint16, flags uint32) inputEvent {
+	event := inputEvent{kind: inputKeyboard}
+	binary.LittleEndian.PutUint16(event.body[0:2], key)
+	binary.LittleEndian.PutUint32(event.body[4:8], flags)
+	return event
 }
 
 // foregroundWindow is the window the user is working in, which is what a
@@ -69,18 +97,6 @@ func activateWindow(window uintptr) error {
 		return errors.New("the window to paste into would not come forward")
 	}
 	return nil
-}
-
-// keyboardInput is one key press or release, as SendInput reads it: the
-// kind, the key, the flags, and the padding the system expects.
-type keyboardInput struct {
-	kind       uint32
-	_          uint32
-	virtualKey uint16
-	scanCode   uint16
-	flags      uint32
-	time       uint32
-	extra      uintptr
 }
 
 const (
