@@ -5,6 +5,7 @@ import (
 	"context"
 	"image"
 	"image/png"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -533,6 +534,44 @@ func TestAPictureIsKeptAsAFile(t *testing.T) {
 	plugin.capture()
 	if items := plugin.items(); len(items) != 1 {
 		t.Errorf("the history holds %d items, want the picture once", len(items))
+	}
+}
+
+func TestAPictureThatWasLetGoIsDeleted(t *testing.T) {
+	clipboard := &fakeClipboard{}
+	plugin, _ := newTestPlugin(t, clipboard)
+	plugin.history = NewHistory(1)
+
+	clipboard.content = core.ClipboardContent{Kind: core.ClipboardImage, Image: pngOfSize(t, 2, 2)}
+	plugin.capture()
+	first := plugin.items()[0].Image
+
+	// The history keeps one item, so the next one lets the picture go: the
+	// file it was kept in goes with it, or the cache fills with pictures
+	// nothing shows.
+	clipboard.content = core.ClipboardContent{Kind: core.ClipboardImage, Image: pngOfSize(t, 3, 3)}
+	plugin.capture()
+
+	if _, err := os.Stat(first); !os.IsNotExist(err) {
+		t.Errorf("the picture of the item that was let go is still there: %v", err)
+	}
+	if _, err := os.Stat(plugin.items()[0].Image); err != nil {
+		t.Errorf("the picture of the item that was kept is gone: %v", err)
+	}
+}
+
+func TestAPictureOfARemovedItemIsDeleted(t *testing.T) {
+	clipboard := &fakeClipboard{}
+	plugin, _ := newTestPlugin(t, clipboard)
+
+	clipboard.content = core.ClipboardContent{Kind: core.ClipboardImage, Image: pngOfSize(t, 4, 4)}
+	plugin.capture()
+	picture := plugin.items()[0].Image
+
+	plugin.remove(0)
+
+	if _, err := os.Stat(picture); !os.IsNotExist(err) {
+		t.Errorf("the picture of the item that was removed is still there: %v", err)
 	}
 }
 

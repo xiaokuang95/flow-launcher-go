@@ -260,6 +260,26 @@ func (h *History) Clear() {
 	h.items = kept
 }
 
+// dropped are the pictures the items that were let go kept, which the
+// caller removes: a history of two hundred items that has been used for a
+// while would leave every picture it ever held in the cache.
+func (h *History) dropped(before []Item) []string {
+	kept := make(map[string]bool, len(h.items))
+	for _, item := range h.items {
+		if item.Image != "" {
+			kept[item.Image] = true
+		}
+	}
+
+	var dropped []string
+	for _, item := range before {
+		if item.Image != "" && !kept[item.Image] {
+			dropped = append(dropped, item.Image)
+		}
+	}
+	return dropped
+}
+
 // prune keeps the pinned items and the newest of the rest, up to the
 // limit.
 func (h *History) prune() {

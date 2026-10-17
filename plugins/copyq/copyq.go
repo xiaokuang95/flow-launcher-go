@@ -440,12 +440,28 @@ func (p *Plugin) writeImage(image []byte) (string, error) {
 // add puts an item in the history and reports whether it was new.
 func (p *Plugin) add(item Item) bool {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if p.history == nil {
 		p.history = NewHistory(p.settings.MaxItems)
 	}
-	return p.history.Add(item)
+	before := append([]Item(nil), p.history.Items()...)
+	added := p.history.Add(item)
+	dropped := p.history.dropped(before)
+	p.mu.Unlock()
+
+	p.removePictures(dropped)
+	return added
+}
+
+// removePictures deletes the pictures the history let go.
+func (p *Plugin) removePictures(paths []string) {
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			p.api.LogError("CopyQ", "removing a picture failed: "+err.Error())
+		}
+	}
 }
 
 // saveHistory keeps the history for the next run.
@@ -628,9 +644,12 @@ func (p *Plugin) pin(index int, pinned bool) {
 // remove takes an item out of the history.
 func (p *Plugin) remove(index int) {
 	p.mu.Lock()
+	before := append([]Item(nil), p.history.Items()...)
 	ok := p.history.Remove(index)
+	dropped := p.history.dropped(before)
 	p.mu.Unlock()
 
+	p.removePictures(dropped)
 	if ok {
 		p.saveHistory()
 		p.api.ReQuery(true)
@@ -640,9 +659,12 @@ func (p *Plugin) remove(index int) {
 // clear takes everything out but what the user pinned.
 func (p *Plugin) clear() {
 	p.mu.Lock()
+	before := append([]Item(nil), p.history.Items()...)
 	p.history.Clear()
+	dropped := p.history.dropped(before)
 	p.mu.Unlock()
 
+	p.removePictures(dropped)
 	p.saveHistory()
 	p.api.ReQuery(true)
 }
